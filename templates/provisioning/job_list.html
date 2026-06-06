@@ -1,0 +1,103 @@
+{% extends "base/base.html" %}
+{% block title %}Provisioning{% endblock %}
+{% block breadcrumb %}Provisioning / Jobs{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between mb-4">
+  <h4><i class="bi bi-terminal me-2"></i>Provisioning Jobs</h4>
+  <div class="d-flex gap-2">
+    <a href="{% url 'template_list' %}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-file-code me-1"></i>Templates
+    </a>
+    <button class="btn btn-primary btn-sm" data-bs-toggle="modal" data-bs-target="#newJobModal">
+      <i class="bi bi-plus me-1"></i>New Job
+    </button>
+  </div>
+</div>
+
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-dark table-hover mb-0">
+      <thead>
+        <tr><th>#</th><th>Template</th><th>Status</th><th>Devices</th><th>By</th><th>Created</th><th></th></tr>
+      </thead>
+      <tbody>
+        {% for job in jobs %}
+        <tr>
+          <td>{{ job.pk }}</td>
+          <td>{{ job.template.name|default:"Ad-hoc" }}</td>
+          <td>
+            <span class="badge bg-{% if job.status == 'success' %}success{% elif job.status == 'failed' %}danger{% elif job.status == 'running' %}primary{% elif job.status == 'partial' %}warning text-dark{% else %}secondary{% endif %}">
+              {{ job.status }}
+            </span>
+          </td>
+          <td>{{ job.devices.count }}</td>
+          <td>{{ job.initiated_by.username|default:"—" }}</td>
+          <td><small>{{ job.created_at|date:"Y-m-d H:i" }}</small></td>
+          <td><a href="{% url 'job_detail' job.pk %}" class="btn btn-sm btn-outline-secondary"><i class="bi bi-eye"></i></a></td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="7" class="text-center text-muted py-4">No provisioning jobs yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+
+<!-- New Job Modal -->
+<div class="modal fade" id="newJobModal" tabindex="-1">
+  <div class="modal-dialog modal-lg">
+    <div class="modal-content bg-dark">
+      <div class="modal-header">
+        <h5 class="modal-title">New Provisioning Job</h5>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <form id="newJobForm">
+          <div class="mb-3">
+            <label class="form-label">Template ID</label>
+            <input type="number" class="form-control" name="template" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Device IDs (comma-separated)</label>
+            <input type="text" class="form-control" name="device_ids" placeholder="1,2,3" required>
+          </div>
+          <div class="mb-3">
+            <label class="form-label">Variables (JSON)</label>
+            <textarea class="form-control font-monospace" name="variables" rows="6">{}</textarea>
+          </div>
+          <button type="submit" class="btn btn-primary">Submit Job</button>
+          <div id="jobResult" class="mt-3"></div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('newJobForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const csrf = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+  const fd = new FormData(e.target);
+  const payload = {
+    template: parseInt(fd.get('template')),
+    device_ids: fd.get('device_ids').split(',').map(Number),
+    variables: JSON.parse(fd.get('variables') || '{}'),
+  };
+  const r = await fetch('/api/provisioning/jobs/', {
+    method: 'POST',
+    headers: {'X-CSRFToken': csrf, 'Content-Type': 'application/json'},
+    credentials: 'same-origin',
+    body: JSON.stringify(payload),
+  });
+  const data = await r.json();
+  if (r.ok) {
+    document.getElementById('jobResult').innerHTML = `<div class="alert alert-success">Job #${data.id} created. <a href="/provisioning/jobs/${data.id}/">View</a></div>`;
+  } else {
+    document.getElementById('jobResult').innerHTML = `<div class="alert alert-danger"><pre>${JSON.stringify(data, null, 2)}</pre></div>`;
+  }
+});
+</script>
+{% endblock %}

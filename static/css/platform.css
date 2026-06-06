@@ -1,0 +1,32 @@
+/* DevSecOps Platform custom styles */
+:root {
+  --primary: #0d6efd;
+  --sidebar-bg: #1a1d21;
+  --card-bg: #212529;
+}
+
+.card {
+  border-color: #2d3238;
+  background-color: var(--card-bg);
+}
+
+.table-dark {
+  --bs-table-bg: #1a1d21;
+  --bs-table-hover-bg: #2d3238;
+}
+
+pre {
+  background: #0d1117;
+  color: #c9d1d9;
+  border-radius: 6px;
+  font-size: 0.8rem;
+}
+
+.badge {
+  font-weight: 500;
+}
+
+/* Diff coloring */
+.diff-add { background-color: rgba(63, 185, 80, 0.15); color: #3fb950; }
+.diff-del { background-color: rgba(248, 81, 73, 0.15); color: #f85149; }
+.diff-hunk { color: #79c0ff; }

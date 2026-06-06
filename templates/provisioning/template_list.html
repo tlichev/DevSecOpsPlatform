@@ -1,0 +1,31 @@
+{% extends "base/base.html" %}
+{% block title %}Config Templates{% endblock %}
+{% block breadcrumb %}Provisioning / Templates{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between mb-4">
+  <h4><i class="bi bi-file-code me-2"></i>Configuration Templates</h4>
+</div>
+<div class="row g-3">
+  {% for tmpl in templates %}
+  <div class="col-md-4">
+    <div class="card h-100">
+      <div class="card-body">
+        <h6 class="card-title">{{ tmpl.name }}</h6>
+        <span class="badge bg-secondary mb-2">{{ tmpl.get_template_type_display }}</span>
+        <p class="card-text small text-muted">{{ tmpl.description|default:"No description" }}</p>
+      </div>
+      <div class="card-footer">
+        <a href="{% url 'template_detail' tmpl.pk %}" class="btn btn-sm btn-outline-secondary">
+          <i class="bi bi-eye me-1"></i>View
+        </a>
+      </div>
+    </div>
+  </div>
+  {% empty %}
+  <div class="col-12">
+    <div class="alert alert-info">No templates yet. Add them via the Admin or API.</div>
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

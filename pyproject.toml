@@ -1,0 +1,14 @@
+[tool.bandit]
+exclude_dirs = ["tests", "venv", ".venv", "staticfiles"]
+skips = ["B101"]  # allow assert in tests
+
+[tool.bandit.assert_used]
+skips = ["*test*.py"]
+
+[tool.coverage.run]
+source = ["apps", "devsecops_platform"]
+omit = ["*/migrations/*", "*/tests/*", "manage.py"]
+
+[tool.coverage.report]
+show_missing = true
+fail_under = 70

@@ -1,0 +1,30 @@
+{% extends "base/base.html" %}
+{% block title %}Compliance Checks{% endblock %}
+{% block breadcrumb %}Security / Compliance Checks{% endblock %}
+
+{% block content %}
+<h4 class="mb-4"><i class="bi bi-shield-check me-2"></i>Compliance Checks</h4>
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-dark table-hover mb-0 small">
+      <thead>
+        <tr><th>Device</th><th>Rule</th><th>Severity</th><th>Status</th><th>Detail</th><th>Checked</th></tr>
+      </thead>
+      <tbody>
+        {% for check in checks %}
+        <tr>
+          <td>{{ check.device.hostname }}</td>
+          <td>{{ check.rule.name }}</td>
+          <td><span class="badge bg-{% if check.rule.severity == 'critical' %}danger{% elif check.rule.severity == 'high' %}warning text-dark{% else %}secondary{% endif %}">{{ check.rule.severity }}</span></td>
+          <td><span class="badge bg-{% if check.status == 'compliant' %}success{% elif check.status == 'non_compliant' %}danger{% else %}secondary{% endif %}">{{ check.status }}</span></td>
+          <td><small class="text-muted">{{ check.detail|default:"—"|truncatechars:60 }}</small></td>
+          <td><small>{{ check.checked_at|date:"Y-m-d H:i" }}</small></td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="text-center text-muted py-4">No compliance checks yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

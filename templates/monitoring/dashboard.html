@@ -1,0 +1,107 @@
+{% extends "base/base.html" %}
+{% block title %}Dashboard — DevSecOps Platform{% endblock %}
+{% block breadcrumb %}Dashboard{% endblock %}
+
+{% block content %}
+<div class="row g-4 mb-4">
+  <div class="col-md-3">
+    <div class="card bg-primary text-white">
+      <div class="card-body">
+        <div class="d-flex justify-content-between">
+          <div>
+            <h6 class="card-title">Total Devices</h6>
+            <h2 class="mb-0">{{ device_count }}</h2>
+          </div>
+          <i class="bi bi-hdd-network fs-1 opacity-50"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card bg-success text-white">
+      <div class="card-body">
+        <div class="d-flex justify-content-between">
+          <div>
+            <h6 class="card-title">Online</h6>
+            <h2 class="mb-0">{{ online_count }}</h2>
+          </div>
+          <i class="bi bi-check-circle fs-1 opacity-50"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card bg-danger text-white">
+      <div class="card-body">
+        <div class="d-flex justify-content-between">
+          <div>
+            <h6 class="card-title">Offline</h6>
+            <h2 class="mb-0">{{ offline_count }}</h2>
+          </div>
+          <i class="bi bi-x-circle fs-1 opacity-50"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div class="col-md-3">
+    <div class="card bg-warning text-dark">
+      <div class="card-body">
+        <div class="d-flex justify-content-between">
+          <div>
+            <h6 class="card-title">Active Alerts</h6>
+            <h2 class="mb-0">{{ firing_alerts }}</h2>
+            <small>{{ critical_alerts }} critical</small>
+          </div>
+          <i class="bi bi-bell fs-1 opacity-50"></i>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Grafana embed -->
+<div class="card mb-4">
+  <div class="card-header d-flex justify-content-between align-items-center">
+    <span><i class="bi bi-graph-up me-2"></i>Network Overview</span>
+    <a href="{% url 'grafana_embed' %}" class="btn btn-sm btn-outline-secondary">Full Grafana View</a>
+  </div>
+  <div class="card-body p-0">
+    <div class="iframe-container" style="height:500px;">
+      <iframe src="{{ grafana_url }}/d/network-overview/network-overview?orgId=1&refresh=30s&kiosk=tv"
+              title="Network Overview Dashboard"
+              sandbox="allow-same-origin allow-scripts allow-popups allow-forms"></iframe>
+    </div>
+  </div>
+</div>
+
+<!-- Recent alerts table -->
+<div class="card">
+  <div class="card-header"><i class="bi bi-bell me-2"></i>Recent Firing Alerts</div>
+  <div class="table-responsive">
+    <table class="table table-dark table-hover mb-0">
+      <thead>
+        <tr>
+          <th>Alert</th><th>Severity</th><th>Device</th><th>Instance</th><th>Since</th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for alert in recent_alerts %}
+        <tr>
+          <td>{{ alert.alert_name }}</td>
+          <td>
+            <span class="badge bg-{% if alert.severity == 'critical' %}danger{% elif alert.severity == 'warning' %}warning text-dark{% else %}secondary{% endif %}">
+              {{ alert.severity }}
+            </span>
+          </td>
+          <td>{{ alert.device.hostname|default:"—" }}</td>
+          <td><code>{{ alert.instance }}</code></td>
+          <td><small class="text-muted">{{ alert.received_at|timesince }} ago</small></td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="5" class="text-center text-muted py-3">No active alerts</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

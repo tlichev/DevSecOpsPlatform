@@ -1,0 +1,38 @@
+[
+  {
+    "model": "monitoring.grafanadashboard",
+    "pk": 1,
+    "fields": {
+      "title": "Network Overview",
+      "uid": "network-overview",
+      "panel_id": null,
+      "description": "Interface bandwidth, CPU utilization, interface status and OSPF neighbor state",
+      "embed_url": "",
+      "order": 1
+    }
+  },
+  {
+    "model": "monitoring.grafanadashboard",
+    "pk": 2,
+    "fields": {
+      "title": "Host Metrics",
+      "uid": "node-exporter-full",
+      "panel_id": null,
+      "description": "Host machine CPU, memory, disk, and network metrics via Node Exporter",
+      "embed_url": "",
+      "order": 2
+    }
+  },
+  {
+    "model": "monitoring.grafanadashboard",
+    "pk": 3,
+    "fields": {
+      "title": "Active Alerts",
+      "uid": "alertmanager-alerts",
+      "panel_id": null,
+      "description": "Active Prometheus AlertManager alerts",
+      "embed_url": "",
+      "order": 3
+    }
+  }
+]

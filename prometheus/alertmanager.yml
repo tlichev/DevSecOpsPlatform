@@ -1,0 +1,33 @@
+global:
+  resolve_timeout: 5m
+  smtp_require_tls: false
+
+route:
+  group_by: ["alertname", "instance"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  receiver: django_webhook
+  routes:
+    - match:
+        severity: critical
+      receiver: django_webhook
+      continue: true
+    - match:
+        severity: warning
+      receiver: django_webhook
+
+receivers:
+  - name: django_webhook
+    webhook_configs:
+      - url: "http://django:8000/api/monitoring/webhook/alertmanager/"
+        send_resolved: true
+        http_config:
+          follow_redirects: true
+
+inhibit_rules:
+  - source_match:
+      severity: critical
+    target_match:
+      severity: warning
+    equal: ["instance", "alertname"]

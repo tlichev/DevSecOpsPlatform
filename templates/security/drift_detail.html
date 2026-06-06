@@ -1,0 +1,28 @@
+{% extends "base/base.html" %}
+{% block title %}Drift Detail — {{ report.device.hostname }}{% endblock %}
+{% block breadcrumb %}Security / Drift / {{ report.device.hostname }}{% endblock %}
+
+{% block content %}
+<div class="card mb-4">
+  <div class="card-header d-flex justify-content-between">
+    <span><i class="bi bi-exclamation-triangle me-2 text-danger"></i>Drift Detected: {{ report.device.hostname }}</span>
+    <span class="badge bg-danger">{{ report.status }}</span>
+  </div>
+  <div class="card-body">
+    <dl class="row">
+      <dt class="col-sm-3">Device</dt><dd class="col-sm-9">{{ report.device.hostname }} ({{ report.device.ip_address }})</dd>
+      <dt class="col-sm-3">Golden snapshot</dt><dd class="col-sm-9">{{ report.golden_snapshot.taken_at|date:"Y-m-d H:i"|default:"—" }}</dd>
+      <dt class="col-sm-3">Current snapshot</dt><dd class="col-sm-9">{{ report.current_snapshot.taken_at|date:"Y-m-d H:i"|default:"—" }}</dd>
+      <dt class="col-sm-3">Checked</dt><dd class="col-sm-9">{{ report.checked_at|date:"Y-m-d H:i" }}</dd>
+    </dl>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">Configuration Diff</div>
+  <div class="card-body p-0">
+    <pre class="p-3 mb-0 small" style="max-height:600px;overflow:auto;background:#0d1117;">{% for line in report.diff.splitlines %}{% if line|slice:':1' == '+' %}<span class="text-success">{{ line }}</span>{% elif line|slice:':1' == '-' %}<span class="text-danger">{{ line }}</span>{% elif line|slice:':2' == '@@' %}<span class="text-primary">{{ line }}</span>{% else %}{{ line }}{% endif %}
+{% endfor %}</pre>
+  </div>
+</div>
+{% endblock %}

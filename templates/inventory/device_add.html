@@ -1,0 +1,92 @@
+{% extends "base/base.html" %}
+{% block title %}Add Device{% endblock %}
+{% block breadcrumb %}Inventory / Add Device{% endblock %}
+
+{% block content %}
+<div class="row justify-content-center">
+  <div class="col-md-8">
+    <div class="card">
+      <div class="card-header"><i class="bi bi-plus-circle me-2"></i>Add New Device</div>
+      <div class="card-body">
+        <form id="addDeviceForm">
+          <div class="row g-3">
+            <div class="col-md-6">
+              <label class="form-label">Hostname *</label>
+              <input type="text" class="form-control" name="hostname" required>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">IP Address *</label>
+              <input type="text" class="form-control" name="ip_address" required placeholder="192.168.100.1">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Device Type</label>
+              <select class="form-select" name="device_type">
+                <option value="router">Router</option>
+                <option value="switch">Switch</option>
+                <option value="firewall">Firewall</option>
+                <option value="server">Server</option>
+                <option value="unknown">Unknown</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Vendor</label>
+              <select class="form-select" name="vendor">
+                <option value="cisco">Cisco</option>
+                <option value="juniper">Juniper</option>
+                <option value="arista">Arista</option>
+                <option value="pfsense">pfSense</option>
+                <option value="other">Other</option>
+              </select>
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">SSH Username</label>
+              <input type="text" class="form-control" name="ssh_username" value="admin">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">SSH Password</label>
+              <input type="password" class="form-control" name="ssh_password">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Site</label>
+              <input type="text" class="form-control" name="site" placeholder="HQ / DataCenter">
+            </div>
+            <div class="col-md-6">
+              <label class="form-label">Description</label>
+              <input type="text" class="form-control" name="description">
+            </div>
+          </div>
+          <div class="mt-4 d-flex gap-2">
+            <button type="submit" class="btn btn-primary">Add Device</button>
+            <a href="{% url 'inventory_list' %}" class="btn btn-outline-secondary">Cancel</a>
+          </div>
+          <div id="result" class="mt-3"></div>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('addDeviceForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const fd = new FormData(e.target);
+  const data = Object.fromEntries(fd.entries());
+  const csrf = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+  const r = await fetch('/api/inventory/devices/', {
+    method: 'POST',
+    headers: {'X-CSRFToken': csrf, 'Content-Type': 'application/json'},
+    credentials: 'same-origin',
+    body: JSON.stringify(data),
+  });
+  const result = await r.json();
+  if (r.ok) {
+    document.getElementById('result').innerHTML = `<div class="alert alert-success">Device added! <a href="/inventory/${result.id}/">View</a></div>`;
+    e.target.reset();
+  } else {
+    document.getElementById('result').innerHTML = `<div class="alert alert-danger"><pre>${JSON.stringify(result, null, 2)}</pre></div>`;
+  }
+});
+</script>
+{% endblock %}

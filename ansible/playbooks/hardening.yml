@@ -1,0 +1,63 @@
+---
+# Security hardening baseline for Cisco IOS devices
+- name: Apply security hardening baseline
+  hosts: cisco_devices
+  gather_facts: false
+  connection: network_cli
+
+  vars:
+    ansible_network_os: ios
+    ansible_become: true
+    ansible_become_method: enable
+
+  tasks:
+    - name: Disable unnecessary services
+      cisco.ios.ios_config:
+        lines:
+          - no service finger
+          - no ip http server
+          - no ip http secure-server
+          - no cdp run
+          - no ip source-route
+          - service password-encryption
+          - security passwords min-length 10
+
+    - name: Configure SSH v2
+      cisco.ios.ios_config:
+        lines:
+          - ip ssh version 2
+          - ip ssh time-out 60
+          - ip ssh authentication-retries 3
+
+    - name: Configure VTY lines — SSH only
+      cisco.ios.ios_config:
+        parents: line vty 0 4
+        lines:
+          - transport input ssh
+          - login local
+          - exec-timeout 10 0
+          - access-class MGMT_ACCESS in
+
+    - name: Configure management ACL
+      cisco.ios.ios_config:
+        lines:
+          - ip access-list standard MGMT_ACCESS
+          - " permit 192.168.100.0 0.0.0.255"
+          - " deny any log"
+
+    - name: Enable logging
+      cisco.ios.ios_config:
+        lines:
+          - logging buffered 16384
+          - logging console critical
+          - service timestamps log datetime msec localtime show-timezone
+
+    - name: Configure banner
+      cisco.ios.ios_config:
+        lines:
+          - "banner motd # AUTHORIZED ACCESS ONLY - This system is monitored #"
+
+    - name: Save running configuration
+      cisco.ios.ios_command:
+        commands:
+          - write memory

@@ -1,0 +1,33 @@
+{% extends "base/base.html" %}
+{% block title %}Audit Log{% endblock %}
+{% block breadcrumb %}Provisioning / Audit Log{% endblock %}
+
+{% block content %}
+<h4 class="mb-4"><i class="bi bi-journal-text me-2"></i>Audit Log</h4>
+<div class="card">
+  <div class="table-responsive">
+    <table class="table table-dark table-hover mb-0 small">
+      <thead>
+        <tr><th>Timestamp</th><th>Action</th><th>Actor</th><th>Device</th><th>Success</th><th>Detail</th></tr>
+      </thead>
+      <tbody>
+        {% for log in logs %}
+        <tr>
+          <td><code>{{ log.timestamp|date:"Y-m-d H:i:s" }}</code></td>
+          <td><span class="badge bg-secondary">{{ log.get_action_display }}</span></td>
+          <td>{{ log.actor.username|default:"System" }}</td>
+          <td>{{ log.device.hostname|default:"—" }}</td>
+          <td>
+            {% if log.success %}<i class="bi bi-check-circle text-success"></i>
+            {% else %}<i class="bi bi-x-circle text-danger"></i>{% endif %}
+          </td>
+          <td><small class="text-muted">{{ log.detail|truncatechars:80 }}</small></td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="text-center text-muted py-4">No audit log entries.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}

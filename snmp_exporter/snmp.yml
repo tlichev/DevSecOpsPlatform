@@ -1,0 +1,112 @@
+# SNMP Exporter configuration for Cisco IOS devices
+# Covers: interfaces, system info, OSPF, CPU
+
+auths:
+  public_v2c:
+    community: public
+    version: 2
+
+modules:
+  cisco_ios:
+    walk:
+      - 1.3.6.1.2.1.1          # system (sysDescr, sysName, sysUpTime, etc.)
+      - 1.3.6.1.2.1.2          # interfaces (ifTable)
+      - 1.3.6.1.2.1.31         # ifXTable (high-capacity counters)
+      - 1.3.6.1.4.1.9.9.109    # cpmCPU (Cisco CPU MIB)
+      - 1.3.6.1.2.1.14         # OSPF MIB
+    auth:
+      community: public
+    version: 2
+    metrics:
+      # System
+      - name: sysUpTime
+        oid: 1.3.6.1.2.1.1.3.0
+        type: gauge
+        help: "System uptime in hundredths of a second"
+      - name: sysName
+        oid: 1.3.6.1.2.1.1.5.0
+        type: DisplayString
+        help: "System hostname"
+      # Interfaces
+      - name: ifDescr
+        oid: 1.3.6.1.2.1.2.2.1.2
+        type: DisplayString
+        help: "Interface description"
+        indexes:
+          - labelname: ifIndex
+            type: gauge
+      - name: ifOperStatus
+        oid: 1.3.6.1.2.1.2.2.1.8
+        type: gauge
+        help: "Interface operational status (1=up, 2=down)"
+        indexes:
+          - labelname: ifIndex
+            type: gauge
+        lookups:
+          - labels: [ifIndex]
+            labelname: ifDescr
+            oid: 1.3.6.1.2.1.2.2.1.2
+            type: DisplayString
+      - name: ifAdminStatus
+        oid: 1.3.6.1.2.1.2.2.1.7
+        type: gauge
+        help: "Interface admin status (1=up, 2=down)"
+        indexes:
+          - labelname: ifIndex
+            type: gauge
+      - name: ifInOctets
+        oid: 1.3.6.1.2.1.2.2.1.10
+        type: counter
+        help: "Total bytes received on interface"
+        indexes:
+          - labelname: ifIndex
+            type: gauge
+        lookups:
+          - labels: [ifIndex]
+            labelname: ifDescr
+            oid: 1.3.6.1.2.1.2.2.1.2
+            type: DisplayString
+      - name: ifOutOctets
+        oid: 1.3.6.1.2.1.2.2.1.16
+        type: counter
+        help: "Total bytes transmitted on interface"
+        indexes:
+          - labelname: ifIndex
+            type: gauge
+        lookups:
+          - labels: [ifIndex]
+            labelname: ifDescr
+            oid: 1.3.6.1.2.1.2.2.1.2
+            type: DisplayString
+      - name: ifInErrors
+        oid: 1.3.6.1.2.1.2.2.1.14
+        type: counter
+        help: "Total inbound errors on interface"
+        indexes:
+          - labelname: ifIndex
+            type: gauge
+      - name: ifOutErrors
+        oid: 1.3.6.1.2.1.2.2.1.20
+        type: counter
+        help: "Total outbound errors on interface"
+        indexes:
+          - labelname: ifIndex
+            type: gauge
+      # Cisco CPU MIB
+      - name: cpmCPUTotal5minRev
+        oid: 1.3.6.1.4.1.9.9.109.1.1.1.1.8
+        type: gauge
+        help: "CPU utilization over last 5 minutes (Cisco)"
+        indexes:
+          - labelname: cpmCPUTotalIndex
+            type: gauge
+      # OSPF
+      - name: ospfNbrState
+        oid: 1.3.6.1.2.1.14.10.1.6
+        type: gauge
+        help: "OSPF neighbor state (8=Full)"
+        indexes:
+          - labelname: ospfNbrIpAddr
+            type: InetAddressIPv4
+          - labelname: ospfNbrAddressLessIndex
+            type: gauge

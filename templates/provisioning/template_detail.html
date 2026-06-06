@@ -1,0 +1,52 @@
+{% extends "base/base.html" %}
+{% block title %}{{ template.name }}{% endblock %}
+{% block breadcrumb %}Provisioning / Templates / {{ template.name }}{% endblock %}
+
+{% block content %}
+<div class="card mb-4">
+  <div class="card-header d-flex justify-content-between">
+    <span>{{ template.name }}</span>
+    <span class="badge bg-secondary">{{ template.get_template_type_display }}</span>
+  </div>
+  <div class="card-body">
+    <p class="text-muted">{{ template.description|default:"No description" }}</p>
+    <h6>Template Body (Jinja2)</h6>
+    <pre class="bg-black text-success p-3 rounded" style="max-height:400px;overflow:auto;">{{ template.body }}</pre>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">Preview Render</div>
+  <div class="card-body">
+    <label class="form-label">Variables (JSON)</label>
+    <textarea id="previewVars" class="form-control font-monospace mb-3" rows="6">{}</textarea>
+    <button class="btn btn-outline-primary" id="previewBtn">Render Preview</button>
+    <pre id="previewResult" class="mt-3 p-3 bg-black text-success rounded d-none"></pre>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('previewBtn').addEventListener('click', async () => {
+  const csrf = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+  const variables = JSON.parse(document.getElementById('previewVars').value || '{}');
+  const r = await fetch('/api/provisioning/templates/{{ template.pk }}/preview/', {
+    method: 'POST',
+    headers: {'X-CSRFToken': csrf, 'Content-Type': 'application/json'},
+    credentials: 'same-origin',
+    body: JSON.stringify({variables}),
+  });
+  const data = await r.json();
+  const el = document.getElementById('previewResult');
+  el.classList.remove('d-none');
+  if (r.ok) {
+    el.textContent = data.rendered;
+    el.style.color = '#00ff00';
+  } else {
+    el.textContent = data.error;
+    el.style.color = '#ff4444';
+  }
+});
+</script>
+{% endblock %}

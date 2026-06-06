@@ -1,0 +1,74 @@
+groups:
+  - name: network_device_alerts
+    interval: 60s
+    rules:
+      # Interface down
+      - alert: InterfaceDown
+        expr: ifOperStatus{job="snmp_cisco"} == 2
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Interface down on {{ $labels.instance }}"
+          description: "Interface {{ $labels.ifDescr }} on device {{ $labels.instance }} has been down for more than 2 minutes."
+
+      # High interface error rate (>1% of traffic)
+      - alert: HighInterfaceErrorRate
+        expr: >
+          rate(ifInErrors{job="snmp_cisco"}[5m]) / (rate(ifInOctets{job="snmp_cisco"}[5m]) + 1) > 0.01
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High error rate on {{ $labels.instance }}:{{ $labels.ifDescr }}"
+          description: "Interface error rate exceeds 1%."
+
+      # SNMP target unreachable (scrape failed)
+      - alert: SNMPTargetDown
+        expr: up{job="snmp_cisco"} == 0
+        for: 3m
+        labels:
+          severity: critical
+        annotations:
+          summary: "SNMP target unreachable: {{ $labels.instance }}"
+          description: "Prometheus cannot reach {{ $labels.instance }} via SNMP for more than 3 minutes."
+
+      # High CPU (requires entPhysicalDescr / cpmCPUTotalEntry if supported)
+      - alert: HighCPUUtilization
+        expr: cpmCPUTotal5minRev{job="snmp_cisco"} > 80
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU on {{ $labels.instance }}"
+          description: "CPU utilization is {{ $value }}% on {{ $labels.instance }}."
+
+      # OSPF neighbor down (sysDescr + ospfNbrState != 8 means not Full)
+      - alert: OSPFNeighborNotFull
+        expr: ospfNbrState{job="snmp_cisco"} != 8
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "OSPF neighbor not in Full state on {{ $labels.instance }}"
+          description: "OSPF neighbor {{ $labels.ospfNbrIpAddr }} is in state {{ $value }} (expected 8=Full)."
+
+  - name: host_alerts
+    rules:
+      - alert: HostHighCPU
+        expr: 100 - (avg by(instance)(rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Host CPU high on {{ $labels.instance }}"
+          description: "CPU usage is above 85%."
+
+      - alert: HostDiskSpaceLow
+        expr: (node_filesystem_avail_bytes{mountpoint="/"} / node_filesystem_size_bytes{mountpoint="/"}) * 100 < 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Disk space low on {{ $labels.instance }}"
+          description: "Less than 10% disk space remaining."

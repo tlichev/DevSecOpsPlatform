@@ -1,0 +1,41 @@
+{% extends "base/base.html" %}
+{% block title %}Grafana Dashboards{% endblock %}
+{% block breadcrumb %}Monitoring / Grafana{% endblock %}
+
+{% block content %}
+<div class="row">
+  <div class="col-md-3">
+    <div class="list-group mb-3">
+      {% for dash in dashboards %}
+      <a href="?uid={{ dash.uid }}"
+         class="list-group-item list-group-item-action {% if selected.uid == dash.uid %}active{% endif %} bg-dark text-white border-secondary">
+        <i class="bi bi-graph-up me-2"></i>{{ dash.title }}
+      </a>
+      {% empty %}
+      <div class="list-group-item bg-dark text-muted">No dashboards configured</div>
+      {% endfor %}
+    </div>
+    <a href="{{ grafana_url }}" target="_blank" class="btn btn-outline-secondary btn-sm w-100">
+      <i class="bi bi-box-arrow-up-right me-1"></i>Open Grafana
+    </a>
+  </div>
+  <div class="col-md-9">
+    {% if selected %}
+    <div class="card">
+      <div class="card-header">{{ selected.title }}</div>
+      <div class="card-body p-0">
+        <div class="iframe-container" style="height:650px;">
+          <iframe
+            src="{{ grafana_url }}/d/{{ selected.uid }}?orgId=1&refresh=30s&kiosk=tv"
+            title="{{ selected.title }}"
+            sandbox="allow-same-origin allow-scripts allow-popups allow-forms">
+          </iframe>
+        </div>
+      </div>
+    </div>
+    {% else %}
+    <div class="alert alert-info">Select a dashboard from the left panel.</div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}

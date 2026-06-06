@@ -1,0 +1,196 @@
+version: "3.9"
+
+x-django-env: &django-env
+  env_file: .env
+  depends_on:
+    postgres:
+      condition: service_healthy
+    redis:
+      condition: service_healthy
+
+services:
+  # ─── Django ────────────────────────────────────────────────────────────────
+  django:
+    build: .
+    <<: *django-env
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+      - static_volume:/app/staticfiles
+    networks:
+      - backend
+      - monitoring
+    restart: unless-stopped
+
+  # ─── Celery Worker ─────────────────────────────────────────────────────────
+  celery:
+    build: .
+    <<: *django-env
+    command: celery -A devsecops_platform worker -l info -Q default,provisioning,discovery,compliance
+    volumes:
+      - .:/app
+    networks:
+      - backend
+      - eve_ng   # direct access to 192.168.100.0/24
+    restart: unless-stopped
+
+  # ─── Celery Beat (scheduler) ───────────────────────────────────────────────
+  celery_beat:
+    build: .
+    <<: *django-env
+    command: celery -A devsecops_platform beat -l info --scheduler django_celery_beat.schedulers:DatabaseScheduler
+    volumes:
+      - .:/app
+    networks:
+      - backend
+    restart: unless-stopped
+
+  # ─── Redis ─────────────────────────────────────────────────────────────────
+  redis:
+    image: redis:7.2-alpine
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ─── PostgreSQL ────────────────────────────────────────────────────────────
+  postgres:
+    image: postgres:16-alpine
+    env_file: .env
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - backend
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER} -d ${POSTGRES_DB}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+  # ─── Prometheus ────────────────────────────────────────────────────────────
+  prometheus:
+    image: prom/prometheus:v2.52.0
+    command:
+      - --config.file=/etc/prometheus/prometheus.yml
+      - --storage.tsdb.path=/prometheus
+      - --storage.tsdb.retention.time=30d
+      - --web.enable-lifecycle
+      - --web.enable-admin-api
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./prometheus:/etc/prometheus
+      - prometheus_data:/prometheus
+    networks:
+      - monitoring
+      - eve_ng
+    restart: unless-stopped
+
+  # ─── SNMP Exporter ─────────────────────────────────────────────────────────
+  snmp_exporter:
+    image: prom/snmp-exporter:v0.26.0
+    command:
+      - --config.file=/etc/snmp_exporter/snmp.yml
+    ports:
+      - "9116:9116"
+    volumes:
+      - ./snmp_exporter:/etc/snmp_exporter
+    networks:
+      - monitoring
+      - eve_ng   # must reach 192.168.100.0/24 via SNMP UDP 161
+    restart: unless-stopped
+
+  # ─── Node Exporter ─────────────────────────────────────────────────────────
+  # NOTE: On Windows/Docker Desktop remove the volumes and pid entries below.
+  # They require Linux host access and will fail on Windows.
+  # On Linux: keep as-is for full host metrics.
+  node_exporter:
+    image: prom/node-exporter:v1.8.1
+    command:
+      - --path.rootfs=/host
+    ports:
+      - "9100:9100"
+    volumes:
+      - /proc:/host/proc:ro
+      - /sys:/host/sys:ro
+    networks:
+      - monitoring
+    restart: unless-stopped
+
+  # ─── Grafana ───────────────────────────────────────────────────────────────
+  grafana:
+    image: grafana/grafana:10.4.3
+    ports:
+      - "3000:3000"
+    environment:
+      GF_SECURITY_ADMIN_USER: ${GRAFANA_ADMIN_USER}
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD}
+      GF_SECURITY_ALLOW_EMBEDDING: "true"
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Viewer
+      GF_USERS_ALLOW_SIGN_UP: "false"
+      GF_SERVER_ROOT_URL: http://localhost:3000
+      GF_SMTP_ENABLED: "false"
+    volumes:
+      - grafana_data:/var/lib/grafana
+      - ./grafana/provisioning:/etc/grafana/provisioning
+      - ./grafana/dashboards:/var/lib/grafana/dashboards
+    networks:
+      - monitoring
+    depends_on:
+      - prometheus
+    restart: unless-stopped
+
+  # ─── AlertManager ──────────────────────────────────────────────────────────
+  alertmanager:
+    image: prom/alertmanager:v0.27.0
+    command:
+      - --config.file=/etc/alertmanager/alertmanager.yml
+      - --storage.path=/alertmanager
+      - --web.external-url=http://localhost:9093
+    ports:
+      - "9093:9093"
+    volumes:
+      - ./prometheus/alertmanager.yml:/etc/alertmanager/alertmanager.yml
+      - alertmanager_data:/alertmanager
+    networks:
+      - monitoring
+      - backend
+    restart: unless-stopped
+
+volumes:
+  postgres_data:
+  redis_data:
+  prometheus_data:
+  grafana_data:
+  alertmanager_data:
+  static_volume:
+
+networks:
+  backend:
+    driver: bridge
+  monitoring:
+    driver: bridge
+  eve_ng:
+    # On Linux hosts with a pnet bridge to EVE-NG, set:
+    #   driver: bridge
+    #   driver_opts:
+    #     com.docker.network.bridge.name: pnet1
+    # On Windows/Docker Desktop (development), use a plain bridge:
+    driver: bridge

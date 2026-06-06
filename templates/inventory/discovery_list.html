@@ -1,0 +1,78 @@
+{% extends "base/base.html" %}
+{% block title %}Auto-Discovery{% endblock %}
+{% block breadcrumb %}Inventory / Auto-Discovery{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between mb-4">
+  <h4><i class="bi bi-radar me-2"></i>Auto-Discovery</h4>
+</div>
+
+<div class="card mb-4">
+  <div class="card-header">Start New Discovery Scan</div>
+  <div class="card-body">
+    <form id="discoveryForm" class="row g-3 align-items-end">
+      <div class="col-md-6">
+        <label class="form-label">Subnet (CIDR)</label>
+        <input type="text" class="form-control" name="subnet" placeholder="192.168.100.0/24" required>
+      </div>
+      <div class="col-md-3">
+        <button type="submit" class="btn btn-primary w-100">
+          <i class="bi bi-play me-2"></i>Start Scan
+        </button>
+      </div>
+    </form>
+    <div id="discResult" class="mt-3"></div>
+  </div>
+</div>
+
+<div class="card">
+  <div class="card-header">Recent Discovery Jobs</div>
+  <div class="table-responsive">
+    <table class="table table-dark table-hover mb-0">
+      <thead>
+        <tr><th>Subnet</th><th>Status</th><th>Found</th><th>Added</th><th>Started</th><th>By</th></tr>
+      </thead>
+      <tbody>
+        {% for job in jobs %}
+        <tr>
+          <td><code>{{ job.subnet }}</code></td>
+          <td>
+            <span class="badge bg-{% if job.status == 'completed' %}success{% elif job.status == 'running' %}primary{% elif job.status == 'failed' %}danger{% else %}secondary{% endif %}">
+              {{ job.status }}
+            </span>
+          </td>
+          <td>{{ job.devices_found }}</td>
+          <td>{{ job.devices_added }}</td>
+          <td><small>{{ job.started_at|date:"Y-m-d H:i"|default:"—" }}</small></td>
+          <td>{{ job.initiated_by.username|default:"—" }}</td>
+        </tr>
+        {% empty %}
+        <tr><td colspan="6" class="text-center text-muted py-4">No discovery jobs yet.</td></tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+document.getElementById('discoveryForm').addEventListener('submit', async (e) => {
+  e.preventDefault();
+  const csrf = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+  const subnet = e.target.subnet.value;
+  const r = await fetch('/api/inventory/discovery/', {
+    method: 'POST',
+    headers: {'X-CSRFToken': csrf, 'Content-Type': 'application/json'},
+    credentials: 'same-origin',
+    body: JSON.stringify({subnet}),
+  });
+  const data = await r.json();
+  if (r.ok) {
+    document.getElementById('discResult').innerHTML = `<div class="alert alert-success">Discovery job #${data.id} started for ${subnet}. Refresh in a moment.</div>`;
+  } else {
+    document.getElementById('discResult').innerHTML = `<div class="alert alert-danger">${JSON.stringify(data)}</div>`;
+  }
+});
+</script>
+{% endblock %}

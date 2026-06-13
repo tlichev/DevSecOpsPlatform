@@ -1,0 +1,307 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Dashboard — NetOps Platform{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item active">Dashboard</li>
+{% endblock %}
+
+{% block content %}
+
+<div class="page-header d-flex align-items-center justify-content-between">
+    <div>
+        <h1>Network Operations Dashboard</h1>
+        <p>Enterprise infrastructure overview — Sofia · Burgas · Plovdiv</p>
+    </div>
+    <div class="d-flex gap-2">
+        <button class="btn-ghost" onclick="window._topology && window._topology._fetchStatus()">
+            <i class="bi bi-arrow-clockwise"></i> Refresh
+        </button>
+        <a href="{% url 'inventory:device_list' %}" class="btn-primary-dark">
+            <i class="bi bi-hdd-rack"></i> All Devices
+        </a>
+    </div>
+</div>
+
+<!-- ─── Stats row ──────────────────────────────────────────────────────────── -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-lg-3">
+        <div class="stat-card stat-blue">
+            <div class="stat-icon"><i class="bi bi-hdd-rack-fill"></i></div>
+            <div class="stat-body">
+                <div class="stat-value" id="stat-total-devices">15</div>
+                <div class="stat-label">Total Devices</div>
+                <div class="stat-sub">3 sites · 5 types</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="stat-card stat-green">
+            <div class="stat-icon"><i class="bi bi-building-check"></i></div>
+            <div class="stat-body">
+                <div class="stat-value" id="stat-sites-online"><span class="spinner" style="width:22px;height:22px"></span></div>
+                <div class="stat-label">Sites Online</div>
+                <div class="stat-sub">of 3 total</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="stat-card stat-amber">
+            <div class="stat-icon"><i class="bi bi-bell-fill"></i></div>
+            <div class="stat-body">
+                <div class="stat-value" id="stat-active-alerts"><span class="spinner" style="width:22px;height:22px"></span></div>
+                <div class="stat-label">Active Alerts</div>
+                <div class="stat-sub" id="stat-alert-severity">—</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-lg-3">
+        <div class="stat-card stat-purple">
+            <div class="stat-icon"><i class="bi bi-shield-fill-check"></i></div>
+            <div class="stat-body">
+                <div class="stat-value" id="stat-compliance"><span class="spinner" style="width:22px;height:22px"></span></div>
+                <div class="stat-label">Compliance</div>
+                <div class="compliance-bar">
+                    <div class="compliance-fill" id="compliance-bar-fill" style="width:0%"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ─── Topology map ───────────────────────────────────────────────────────── -->
+<div class="card mb-4">
+    <div class="card-header">
+        <span class="card-header-title">
+            <i class="bi bi-diagram-3"></i>
+            Live Network Topology
+        </span>
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge-status badge-up" style="font-size:11px">Live</span>
+            <span class="topbar-time" id="topo-last-refresh" style="font-size:11px">Refreshes every 30s</span>
+        </div>
+    </div>
+    <div class="topology-container" style="height:480px; position:relative;">
+        <div id="topology-map" style="width:100%;height:100%"></div>
+
+        <!-- Legend -->
+        <div class="topology-legend">
+            <div class="legend-item"><span class="legend-dot" style="background:#10b981"></span>Sofia</div>
+            <div class="legend-item"><span class="legend-dot" style="background:#3b82f6"></span>Burgas</div>
+            <div class="legend-item"><span class="legend-dot" style="background:#a855f7"></span>Plovdiv</div>
+            <div class="legend-item"><span class="legend-dot" style="background:#f59e0b"></span>ISP Core</div>
+            <hr style="border-color:#1f2937;margin:6px 0">
+            <div class="legend-item"><span class="legend-dot" style="background:#10b981"></span>Up</div>
+            <div class="legend-item"><span class="legend-dot" style="background:#ef4444"></span>Down</div>
+            <div class="legend-item"><span class="legend-dot" style="background:#6b7280"></span>Unknown</div>
+        </div>
+    </div>
+</div>
+
+<!-- ─── Bottom row: Alerts + Recent Provisioning ───────────────────────────── -->
+<div class="row g-3">
+
+    <!-- Active alerts -->
+    <div class="col-12 col-lg-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <span class="card-header-title">
+                    <i class="bi bi-bell"></i> Active Alerts
+                </span>
+                <a href="{% url 'monitoring:alerts' %}" class="btn-ghost" style="padding:4px 12px; font-size:12px">
+                    View all <i class="bi bi-arrow-right"></i>
+                </a>
+            </div>
+            <div class="card-body" style="padding:8px 16px">
+                <div id="alerts-list">
+                    <!-- Populated by JS -->
+                    <div class="empty-state" style="padding:32px 16px">
+                        <i class="bi bi-bell-slash"></i>
+                        <p>Loading alerts…</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Recent provisioning -->
+    <div class="col-12 col-lg-6">
+        <div class="card h-100">
+            <div class="card-header">
+                <span class="card-header-title">
+                    <i class="bi bi-terminal"></i> Recent Provisioning
+                </span>
+                <a href="{% url 'provisioning:audit_log' %}" class="btn-ghost" style="padding:4px 12px; font-size:12px">
+                    Audit log <i class="bi bi-arrow-right"></i>
+                </a>
+            </div>
+            <div class="card-body" style="padding:8px 16px">
+                <div id="provisioning-list">
+                    <div class="empty-state" style="padding:32px 16px">
+                        <i class="bi bi-terminal"></i>
+                        <p>Loading activity…</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+</div>
+
+<!-- ─── Site quick-nav ─────────────────────────────────────────────────────── -->
+<div class="row g-3 mt-1">
+    {% with sites=site_summaries %}
+    <div class="col-12 col-md-4">
+        <a href="{% url 'inventory:site_sofia' %}" class="text-decoration-none">
+            <div class="stat-card stat-green" style="border-top-color:#10b981">
+                <div class="stat-icon" style="background:rgba(16,185,129,.15);color:#10b981">
+                    <i class="bi bi-geo-alt-fill"></i>
+                </div>
+                <div class="stat-body">
+                    <div style="font-size:15px;font-weight:700;color:#f9fafb">Sofia</div>
+                    <div style="font-size:12px;color:#6b7280">172.16.1.0/29 · WAN 4.2.2.0/27</div>
+                    <div style="font-size:11px;color:#6b7280;margin-top:4px">5 devices</div>
+                </div>
+                <i class="bi bi-chevron-right" style="color:#374151;font-size:14px;align-self:center"></i>
+            </div>
+        </a>
+    </div>
+    <div class="col-12 col-md-4">
+        <a href="{% url 'inventory:site_burgas' %}" class="text-decoration-none">
+            <div class="stat-card stat-blue" style="border-top-color:#3b82f6">
+                <div class="stat-icon">
+                    <i class="bi bi-geo-alt-fill"></i>
+                </div>
+                <div class="stat-body">
+                    <div style="font-size:15px;font-weight:700;color:#f9fafb">Burgas</div>
+                    <div style="font-size:12px;color:#6b7280">172.16.1.0/29 · WAN 4.2.2.64/27</div>
+                    <div style="font-size:11px;color:#6b7280;margin-top:4px">5 devices</div>
+                </div>
+                <i class="bi bi-chevron-right" style="color:#374151;font-size:14px;align-self:center"></i>
+            </div>
+        </a>
+    </div>
+    <div class="col-12 col-md-4">
+        <a href="{% url 'inventory:site_plovdiv' %}" class="text-decoration-none">
+            <div class="stat-card stat-purple">
+                <div class="stat-icon" style="background:rgba(168,85,247,.15);color:#a855f7">
+                    <i class="bi bi-geo-alt-fill"></i>
+                </div>
+                <div class="stat-body">
+                    <div style="font-size:15px;font-weight:700;color:#f9fafb">Plovdiv</div>
+                    <div style="font-size:12px;color:#6b7280">172.16.1.0/29 · WAN 4.2.2.32/27</div>
+                    <div style="font-size:11px;color:#6b7280;margin-top:4px">5 devices</div>
+                </div>
+                <i class="bi bi-chevron-right" style="color:#374151;font-size:14px;align-self:center"></i>
+            </div>
+        </a>
+    </div>
+    {% endwith %}
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Fetch dashboard stats from API
+async function loadDashboardStats() {
+    try {
+        // Device status summary
+        const r = await fetch('/api/dashboard/stats/', { credentials: 'same-origin' });
+        if (!r.ok) throw new Error('not ready');
+        const data = await r.json();
+
+        document.getElementById('stat-total-devices').textContent = data.total_devices ?? 15;
+        document.getElementById('stat-sites-online').textContent  = data.sites_online  ?? '—';
+        document.getElementById('stat-active-alerts').textContent = data.active_alerts ?? '—';
+
+        const pct = data.compliance_pct ?? 0;
+        document.getElementById('stat-compliance').textContent    = pct + '%';
+        document.getElementById('compliance-bar-fill').style.width = pct + '%';
+
+        if (data.critical_alerts > 0) {
+            document.getElementById('stat-alert-severity').textContent = data.critical_alerts + ' critical';
+        } else {
+            document.getElementById('stat-alert-severity').textContent = 'All clear';
+        }
+    } catch {
+        // API not ready; fill with placeholders
+        document.getElementById('stat-sites-online').textContent = '—';
+        document.getElementById('stat-active-alerts').textContent = '—';
+        document.getElementById('stat-compliance').textContent = '—';
+    }
+}
+
+async function loadAlerts() {
+    try {
+        const r = await fetch('/api/alerts/?limit=5', { credentials: 'same-origin' });
+        if (!r.ok) throw new Error();
+        const data = await r.json();
+        const list  = document.getElementById('alerts-list');
+        if (!data.results || data.results.length === 0) {
+            list.innerHTML = '<div class="empty-state" style="padding:32px 16px"><i class="bi bi-bell-slash"></i><p>No active alerts</p></div>';
+            return;
+        }
+        list.innerHTML = data.results.map(a => `
+            <div class="alert-item alert-${a.severity || 'info'}">
+                <div class="alert-icon">
+                    <i class="bi bi-${a.severity === 'critical' ? 'exclamation-triangle-fill' : 'exclamation-circle-fill'}"></i>
+                </div>
+                <div class="alert-body">
+                    <div class="alert-name">${escHtml(a.name)}</div>
+                    <div class="alert-desc">${escHtml(a.description || '')}</div>
+                </div>
+                <div class="alert-meta">${relTime(a.fired_at)}</div>
+            </div>`).join('');
+    } catch {
+        document.getElementById('alerts-list').innerHTML =
+            '<div class="empty-state" style="padding:32px 16px"><i class="bi bi-bell-slash"></i><p>No active alerts</p></div>';
+    }
+}
+
+async function loadProvisioningActivity() {
+    try {
+        const r = await fetch('/api/audit-log/?limit=5', { credentials: 'same-origin' });
+        if (!r.ok) throw new Error();
+        const data = await r.json();
+        const list = document.getElementById('provisioning-list');
+        if (!data.results || data.results.length === 0) {
+            list.innerHTML = '<div class="empty-state" style="padding:32px 16px"><i class="bi bi-terminal"></i><p>No recent activity</p></div>';
+            return;
+        }
+        list.innerHTML = data.results.map(a => `
+            <div class="audit-item">
+                <i class="bi bi-${a.success ? 'check-circle-fill audit-status-ok' : 'x-circle-fill audit-status-err'}"></i>
+                <div class="audit-body">
+                    <div class="audit-device">${escHtml(a.device_hostname)}</div>
+                    <div class="audit-action">${escHtml(a.template_name || a.action || '')}</div>
+                </div>
+                <div class="audit-time">${relTime(a.timestamp)}</div>
+            </div>`).join('');
+    } catch {
+        document.getElementById('provisioning-list').innerHTML =
+            '<div class="empty-state" style="padding:32px 16px"><i class="bi bi-terminal"></i><p>No recent activity</p></div>';
+    }
+}
+
+function escHtml(str) {
+    return String(str).replace(/[&<>"']/g, c =>
+        ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' }[c]));
+}
+
+function relTime(iso) {
+    if (!iso) return '—';
+    const diff = Math.floor((Date.now() - new Date(iso)) / 1000);
+    if (diff < 60)  return diff + 's ago';
+    if (diff < 3600) return Math.floor(diff/60) + 'm ago';
+    return Math.floor(diff/3600) + 'h ago';
+}
+
+loadDashboardStats();
+loadAlerts();
+loadProvisioningActivity();
+setInterval(loadDashboardStats, 30000);
+setInterval(loadAlerts, 30000);
+</script>
+{% endblock %}

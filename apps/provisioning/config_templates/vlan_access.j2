@@ -1,0 +1,61 @@
+! =============================================================================
+! VLAN Configuration — L2 Access Switch
+! Generated for : {{ hostname }}  ({{ ip_address }})
+! Site          : {{ site_label }}
+! =============================================================================
+
+{% if device_type != 'l2_switch' %}
+! WARNING: This template is intended for L2 switches.
+! Current device type: {{ device_type }}
+{% endif %}
+
+! ── VLAN definitions ─────────────────────────────────────────────────────────
+vlan 10
+ name MGMT_{{ site | upper }}
+vlan 20
+ name LAN_{{ site | upper }}
+vlan 30
+ name SERVERS_{{ site | upper }}
+vlan 99
+ name NATIVE_UNUSED
+vlan 100
+ name UPLINK_TRUNK
+
+! ── Uplink (trunk) to primary firewall ───────────────────────────────────────
+interface Ethernet0/1
+ description UPLINK-to-{{ site | upper }}_PRIM-Gi0/6
+ switchport trunk encapsulation dot1q
+ switchport mode trunk
+ switchport trunk native vlan 99
+ switchport trunk allowed vlan 10,20,30,100
+ spanning-tree portfast trunk
+ no shutdown
+
+! ── Downlink to branch router ────────────────────────────────────────────────
+interface Ethernet0/0
+ description DOWNLINK-to-R_{{ site | upper }}-e0/0
+ switchport mode access
+ switchport access vlan 20
+ spanning-tree portfast
+ no shutdown
+
+! ── Spare/reserve port ───────────────────────────────────────────────────────
+interface Ethernet0/2
+ description SPARE
+ switchport mode access
+ switchport access vlan 99
+ shutdown
+
+! ── Management SVI ───────────────────────────────────────────────────────────
+interface Vlan10
+ description MGMT-SVI-{{ site | upper }}
+ ip address {{ ip_address }} 255.255.255.0
+ no shutdown
+
+! ── STP ──────────────────────────────────────────────────────────────────────
+spanning-tree mode rapid-pvst
+spanning-tree extend system-id
+{% for vid in [10, 20, 30, 100] %}
+spanning-tree vlan {{ vid }} priority 4096
+{% endfor %}
+!

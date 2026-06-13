@@ -1,0 +1,299 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}Inventory — NetOps Platform{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item active">Inventory</li>
+{% endblock %}
+
+{% block content %}
+
+<div class="page-header d-flex align-items-start justify-content-between flex-wrap gap-3">
+    <div>
+        <h1><i class="bi bi-hdd-rack me-2" style="color:var(--blue)"></i>Device Inventory</h1>
+        <p>All managed devices — Sofia · Burgas · Plovdiv · WAN Core</p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+        <button class="btn-ghost" id="btn-discover" title="Scan 192.168.100.0/24 for new devices">
+            <i class="bi bi-search"></i> Discover
+        </button>
+        <button class="btn-ghost" id="btn-poll-all">
+            <i class="bi bi-arrow-repeat"></i> Poll All
+        </button>
+    </div>
+</div>
+
+<!-- ─── Stats row ──────────────────────────────────────────────────────────── -->
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="stat-card stat-blue">
+            <div class="stat-icon"><i class="bi bi-hdd-stack"></i></div>
+            <div class="stat-body">
+                <div class="stat-value">{{ counts.total }}</div>
+                <div class="stat-label">Total</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="stat-card stat-green">
+            <div class="stat-icon"><i class="bi bi-check-circle-fill"></i></div>
+            <div class="stat-body">
+                <div class="stat-value">{{ counts.up }}</div>
+                <div class="stat-label">Up</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="stat-card stat-red">
+            <div class="stat-icon"><i class="bi bi-x-circle-fill"></i></div>
+            <div class="stat-body">
+                <div class="stat-value">{{ counts.down }}</div>
+                <div class="stat-label">Down</div>
+            </div>
+        </div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="stat-card stat-amber">
+            <div class="stat-icon"><i class="bi bi-question-circle-fill"></i></div>
+            <div class="stat-body">
+                <div class="stat-value">{{ counts.unknown }}</div>
+                <div class="stat-label">Unknown</div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- ─── Filters ────────────────────────────────────────────────────────────── -->
+<div class="card mb-3">
+    <div class="card-body" style="padding:14px 18px">
+        <form method="get" class="d-flex gap-3 flex-wrap align-items-end form-dark">
+            <div style="flex:1;min-width:180px">
+                <label class="form-label">Search</label>
+                <input type="text" name="q" class="form-control"
+                       placeholder="Hostname, IP, description…"
+                       value="{{ search_query }}">
+            </div>
+            <div style="min-width:140px">
+                <label class="form-label">Site</label>
+                <select name="site" class="form-select">
+                    <option value="">All sites</option>
+                    {% for val, label in site_choices %}
+                    <option value="{{ val }}" {% if site_filter == val %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div style="min-width:160px">
+                <label class="form-label">Device type</label>
+                <select name="device_type" class="form-select">
+                    <option value="">All types</option>
+                    {% for val, label in type_choices %}
+                    <option value="{{ val }}" {% if type_filter == val %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div style="min-width:130px">
+                <label class="form-label">Status</label>
+                <select name="status" class="form-select">
+                    <option value="">Any status</option>
+                    {% for val, label in status_choices %}
+                    <option value="{{ val }}" {% if status_filter == val %}selected{% endif %}>{{ label }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn-primary-dark">
+                    <i class="bi bi-funnel-fill"></i> Filter
+                </button>
+                {% if site_filter or type_filter or status_filter or search_query %}
+                <a href="{% url 'inventory:device_list' %}" class="btn-ghost">
+                    <i class="bi bi-x-lg"></i> Clear
+                </a>
+                {% endif %}
+            </div>
+        </form>
+    </div>
+</div>
+
+<!-- ─── Device table ───────────────────────────────────────────────────────── -->
+<div class="card">
+    <div class="card-header">
+        <span class="card-header-title">
+            <i class="bi bi-table"></i>
+            Devices
+            {% if site_filter or type_filter or status_filter or search_query %}
+            <span class="nav-badge" style="background:var(--blue)">{{ filtered_count }}</span>
+            {% endif %}
+        </span>
+        <span style="font-size:12px;color:var(--text-muted)">
+            Showing {{ filtered_count }} of {{ counts.total }}
+        </span>
+    </div>
+
+    {% if devices %}
+    <div style="overflow-x:auto">
+        <table class="table-dark-custom">
+            <thead>
+                <tr>
+                    <th>Hostname</th>
+                    <th>Mgmt IP</th>
+                    <th>WAN IP</th>
+                    <th>Site</th>
+                    <th>Type</th>
+                    <th>Vendor / Model</th>
+                    <th>OS Version</th>
+                    <th>Status</th>
+                    <th>Last Seen</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for device in devices %}
+                <tr>
+                    <td>
+                        <a href="{% url 'inventory:device_detail' device.pk %}"
+                           style="font-weight:600;color:var(--text)">
+                            {{ device.hostname }}
+                        </a>
+                    </td>
+                    <td class="mono">{{ device.ip_address }}</td>
+                    <td class="mono">{{ device.wan_ip|default:"—" }}</td>
+                    <td>
+                        <span class="badge-status"
+                              style="background:{{ device.site_color }}22;color:{{ device.site_color }}">
+                            {{ device.get_site_display }}
+                        </span>
+                    </td>
+                    <td style="font-size:12.5px;color:var(--text-muted)">
+                        <i class="bi {{ device.device_type_icon }}" style="margin-right:5px"></i>
+                        {{ device.get_device_type_display }}
+                    </td>
+                    <td style="font-size:12.5px">
+                        {{ device.vendor }}{% if device.model %} · {{ device.model }}{% endif %}
+                    </td>
+                    <td class="mono" style="font-size:11.5px;color:#93c5fd">
+                        {{ device.os_version|default:"—" }}
+                    </td>
+                    <td>
+                        <span class="badge-status badge-{{ device.status }}">{{ device.status }}</span>
+                    </td>
+                    <td style="font-size:12px;color:var(--text-muted)">
+                        {% if device.last_seen %}
+                            {{ device.last_seen|date:"Y-m-d H:i" }}
+                        {% else %}
+                            <span style="color:var(--text-dim)">Never</span>
+                        {% endif %}
+                    </td>
+                    <td>
+                        <div class="d-flex gap-1">
+                            <a href="{% url 'inventory:device_detail' device.pk %}"
+                               class="btn-ghost" style="padding:4px 8px;font-size:12px"
+                               title="View details">
+                                <i class="bi bi-eye"></i>
+                            </a>
+                            <button class="btn-ghost poll-btn"
+                                    data-device-id="{{ device.pk }}"
+                                    data-hostname="{{ device.hostname }}"
+                                    style="padding:4px 8px;font-size:12px"
+                                    title="Poll now">
+                                <i class="bi bi-arrow-repeat"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% else %}
+    <div class="card-body">
+        <div class="empty-state">
+            <i class="bi bi-hdd-rack"></i>
+            <p>
+                {% if site_filter or type_filter or status_filter or search_query %}
+                    No devices match the current filters.
+                    <a href="{% url 'inventory:device_list' %}">Clear filters</a>
+                {% else %}
+                    No devices in inventory yet.
+                    Run <code>python manage.py loaddata fixtures/devices.json</code> to load the topology fixtures.
+                {% endif %}
+            </p>
+        </div>
+    </div>
+    {% endif %}
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Poll single device
+document.querySelectorAll('.poll-btn').forEach(btn => {
+    btn.addEventListener('click', async () => {
+        const id  = btn.dataset.deviceId;
+        const name = btn.dataset.hostname;
+        const icon = btn.querySelector('i');
+        icon.className = 'bi bi-arrow-repeat spin';
+        btn.disabled = true;
+        try {
+            const r = await fetch(`/api/devices/${id}/poll/`, {
+                method: 'POST',
+                headers: { 'X-CSRFToken': getCookie('csrftoken') },
+                credentials: 'same-origin',
+            });
+            const data = await r.json();
+            showToast(`Polling ${name}… task ${data.task_id?.slice(0,8) ?? ''}`, 'info');
+        } catch {
+            showToast(`Failed to poll ${name}`, 'error');
+        } finally {
+            setTimeout(() => { icon.className = 'bi bi-arrow-repeat'; btn.disabled = false; }, 3000);
+        }
+    });
+});
+
+// Poll all devices
+document.getElementById('btn-poll-all').addEventListener('click', async () => {
+    try {
+        const r = await fetch('/api/devices/poll-all/', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            credentials: 'same-origin',
+        });
+        const data = await r.json();
+        showToast(data.message || 'Polling all devices…', 'info');
+    } catch { showToast('Poll failed', 'error'); }
+});
+
+// Discover
+document.getElementById('btn-discover').addEventListener('click', async () => {
+    try {
+        const r = await fetch('/api/devices/discover/', {
+            method: 'POST',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            credentials: 'same-origin',
+        });
+        const data = await r.json();
+        showToast(data.message || 'Discovery scan started…', 'info');
+    } catch { showToast('Discovery failed', 'error'); }
+});
+
+function getCookie(name) {
+    const v = document.cookie.match('(^|;) ?' + name + '=([^;]*)(;|$)');
+    return v ? v[2] : '';
+}
+
+function showToast(msg, type) {
+    const div = document.createElement('div');
+    div.className = `flash flash-${type}`;
+    div.innerHTML = `<i class="bi bi-info-circle-fill"></i><span>${msg}</span>
+                     <button class="flash-close" onclick="this.closest('.flash').remove()"><i class="bi bi-x-lg"></i></button>`;
+    let c = document.querySelector('.flash-container');
+    if (!c) { c = document.createElement('div'); c.className = 'flash-container'; document.querySelector('.page-content').prepend(c); }
+    c.appendChild(div);
+    setTimeout(() => div.remove(), 5000);
+}
+</script>
+<style>
+.spin { animation: spin .7s linear infinite; }
+</style>
+{% endblock %}

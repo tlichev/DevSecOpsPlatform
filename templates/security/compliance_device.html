@@ -1,0 +1,128 @@
+{% extends 'base.html' %}
+{% block title %}{{ device.hostname }} Compliance — NetOps Platform{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'security:home' %}">Security</a></li>
+<li class="breadcrumb-item"><a href="{% url 'security:compliance' %}">Compliance</a></li>
+<li class="breadcrumb-item active">{{ device.hostname }}</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h1 class="h3 mb-1 fw-semibold">
+      <i class="bi bi-shield-check me-2" style="color:var(--blue)"></i>{{ device.hostname }}
+    </h1>
+    <p class="text-secondary mb-0">
+      {{ device.management_ip }} · {{ device.get_site_display }} · {{ device.get_device_type_display }}
+    </p>
+  </div>
+  <div class="d-flex gap-2 align-items-center">
+    {% if score is not None %}
+    <div class="text-center me-2">
+      <div style="font-size:2rem;font-weight:800;color:{% if score >= 90 %}var(--green){% elif score >= 70 %}var(--amber){% else %}var(--red){% endif %}">
+        {{ score }}%
+      </div>
+      <div class="text-secondary" style="font-size:.75rem">{{ pass }}/{{ total }} pass</div>
+    </div>
+    {% endif %}
+    {% if request.user.is_engineer or request.user.is_superuser %}
+    <button class="btn btn-primary btn-sm" id="btn-run-device" data-id="{{ device.pk }}">
+      <i class="bi bi-play-fill me-1"></i>Re-run
+    </button>
+    {% endif %}
+  </div>
+</div>
+
+<div class="card" style="background:var(--surface);border:1px solid var(--border)">
+  <div class="card-body p-0">
+    {% if results %}
+    <div class="table-responsive">
+      <table class="table mb-0" style="color:var(--fg)">
+        <thead>
+          <tr style="border-bottom:1px solid var(--border)">
+            <th class="px-4 py-3 text-secondary" style="font-size:.75rem">Status</th>
+            <th class="px-3 py-3 text-secondary" style="font-size:.75rem">Rule</th>
+            <th class="px-3 py-3 text-secondary" style="font-size:.75rem">Category</th>
+            <th class="px-3 py-3 text-secondary" style="font-size:.75rem">Severity</th>
+            <th class="px-3 py-3 text-secondary" style="font-size:.75rem">Evidence / Error</th>
+            <th class="px-3 py-3 text-secondary" style="font-size:.75rem">Remediation</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% regroup results by rule.category as cat_list %}
+          {% for cat in cat_list %}
+          <tr style="background:rgba(255,255,255,.02)">
+            <td colspan="6" class="px-4 py-1">
+              <span class="text-secondary" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.06em">
+                {{ cat.grouper }}
+              </span>
+            </td>
+          </tr>
+          {% for r in cat.list %}
+          <tr style="border-bottom:1px solid var(--border)" class="align-middle">
+            <td class="px-4 py-2">
+              {% if r.status == 'pass' %}
+              <span class="badge bg-success" style="font-size:.72rem">✓ Pass</span>
+              {% elif r.status == 'fail' %}
+              <span class="badge bg-danger" style="font-size:.72rem">✗ Fail</span>
+              {% elif r.status == 'error' %}
+              <span class="badge bg-warning text-dark" style="font-size:.72rem">⚠ Error</span>
+              {% else %}
+              <span class="badge bg-secondary" style="font-size:.72rem">— Skip</span>
+              {% endif %}
+            </td>
+            <td class="px-3 py-2 fw-medium" style="font-size:.88rem">{{ r.rule.name }}</td>
+            <td class="px-3 py-2 text-secondary" style="font-size:.78rem">{{ r.rule.category }}</td>
+            <td class="px-3 py-2">
+              <span style="font-size:.72rem;font-weight:700;color:{% if r.rule.severity == 'critical' %}var(--red){% elif r.rule.severity == 'warning' %}var(--amber){% else %}var(--blue){% endif %}">
+                {{ r.rule.severity|upper }}
+              </span>
+            </td>
+            <td class="px-3 py-2" style="font-size:.78rem;font-family:monospace;max-width:240px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+              {% if r.evidence %}
+              <span class="text-success" title="{{ r.evidence }}">{{ r.evidence|truncatechars:60 }}</span>
+              {% elif r.error_message %}
+              <span class="text-warning" title="{{ r.error_message }}">{{ r.error_message|truncatechars:60 }}</span>
+              {% elif r.status == 'fail' %}
+              <span class="text-secondary">Pattern not found</span>
+              {% else %}—{% endif %}
+            </td>
+            <td class="px-3 py-2" style="font-size:.75rem;max-width:200px">
+              {% if r.status != 'pass' and r.rule.remediation %}
+              <details>
+                <summary class="text-secondary" style="cursor:pointer">Show fix</summary>
+                <pre style="font-size:.72rem;margin-top:.4rem;white-space:pre-wrap;color:var(--amber)">{{ r.rule.remediation }}</pre>
+              </details>
+              {% else %}—{% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center py-5 text-secondary">
+      <i class="bi bi-shield-slash d-block mb-2" style="font-size:2.5rem"></i>
+      No compliance results for this device yet. Run a check first.
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const CSRF = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+document.getElementById('btn-run-device')?.addEventListener('click', async function() {
+  const id = this.dataset.id;
+  this.disabled = true;
+  this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Running…';
+  const resp = await fetch(`/api/security/compliance/run/${id}/`, {
+    method: 'POST', headers: { 'X-CSRFToken': CSRF, 'Content-Type': 'application/json' }, body: '{}'
+  });
+  if (resp.ok) { this.innerHTML = '✓ Dispatched'; setTimeout(() => location.reload(), 5000); }
+  else { this.innerHTML = '⚠ Error'; this.disabled = false; }
+});
+</script>
+{% endblock %}

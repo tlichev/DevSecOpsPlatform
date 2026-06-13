@@ -1,0 +1,230 @@
+{% extends 'base.html' %}
+{% block title %}Security — NetOps Platform{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item active">Security</li>{% endblock %}
+
+{% block extra_css %}
+<style>
+  .compliance-ring {
+    width: 96px; height: 96px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.5rem; font-weight: 800;
+    background: conic-gradient(var(--score-color, var(--blue)) var(--score-deg, 0deg), var(--border) 0deg);
+    box-shadow: 0 0 0 8px var(--surface) inset;
+  }
+  .score-bar { height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; }
+  .score-bar-fill { height: 100%; border-radius: 3px; transition: width .4s; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h1 class="h3 mb-1 fw-semibold">
+      <i class="bi bi-shield-check me-2" style="color:var(--blue)"></i>Security &amp; Compliance
+    </h1>
+    <p class="text-secondary mb-0">{{ rules_count }} active compliance rules · Golden config drift detection</p>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{% url 'security:compliance' %}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-shield-check me-1"></i>Compliance
+    </a>
+    <a href="{% url 'security:drift' %}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-file-diff me-1"></i>Drift
+    </a>
+    {% if request.user.is_engineer or request.user.is_superuser %}
+    <button class="btn btn-primary btn-sm" id="btn-run-all-compliance">
+      <i class="bi bi-play-fill me-1"></i>Run All Checks
+    </button>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Stats -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-xl-3">
+    <div class="stat-card {% if overall_score is not None and overall_score < 70 %}border-top-red{% elif overall_score is not None and overall_score < 90 %}border-top-amber{% else %}border-top-green{% endif %}">
+      <div class="stat-label">Overall Score</div>
+      <div class="stat-value">
+        {% if overall_score is not None %}
+        <span style="color:{% if overall_score >= 90 %}var(--green){% elif overall_score >= 70 %}var(--amber){% else %}var(--red){% endif %}">
+          {{ overall_score }}%
+        </span>
+        {% else %}
+        <span class="text-secondary">—</span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-xl-3">
+    <div class="stat-card border-top-green">
+      <div class="stat-label">Checks Passing</div>
+      <div class="stat-value text-success">{{ total_pass }}</div>
+      <div class="text-secondary" style="font-size:.75rem">of {{ total_checks }} total</div>
+    </div>
+  </div>
+  <div class="col-6 col-xl-3">
+    <div class="stat-card {% if total_fail > 0 %}border-top-red{% else %}border-top-green{% endif %}">
+      <div class="stat-label">Checks Failing</div>
+      <div class="stat-value {% if total_fail > 0 %}text-danger{% else %}text-success{% endif %}">
+        {{ total_fail }}
+      </div>
+    </div>
+  </div>
+  <div class="col-6 col-xl-3">
+    <div class="stat-card {% if total_drifted > 0 %}border-top-amber{% else %}border-top-green{% endif %}">
+      <div class="stat-label">Config Drift</div>
+      <div class="stat-value {% if total_drifted > 0 %}text-warning{% else %}text-success{% endif %}">
+        {{ total_drifted }}
+      </div>
+      <div class="text-secondary" style="font-size:.75rem">{{ total_clean }} clean</div>
+    </div>
+  </div>
+</div>
+
+{% if not checked %}
+<div class="alert" style="background:rgba(59,130,246,.1);border:1px solid rgba(59,130,246,.3);border-radius:.5rem;color:var(--fg)">
+  <i class="bi bi-info-circle me-2" style="color:var(--blue)"></i>
+  No compliance checks have been run yet.
+  {% if request.user.is_engineer or request.user.is_superuser %}
+  Click <strong>Run All Checks</strong> above to scan all UP devices.
+  {% endif %}
+</div>
+{% endif %}
+
+<div class="row g-4">
+
+  <!-- Per-device score table -->
+  <div class="col-lg-7">
+    <div class="card" style="background:var(--surface);border:1px solid var(--border)">
+      <div class="card-header d-flex justify-content-between align-items-center"
+           style="background:transparent;border-bottom:1px solid var(--border)">
+        <span><i class="bi bi-list-check me-2" style="color:var(--blue)"></i><span class="fw-medium">Device Scores</span></span>
+        <a href="{% url 'security:compliance' %}" class="btn btn-sm btn-outline-secondary" style="font-size:.75rem">
+          Full Report
+        </a>
+      </div>
+      <div class="card-body p-0">
+        {% if device_scores %}
+        <div class="table-responsive">
+          <table class="table mb-0 table-sm" style="color:var(--fg)">
+            <thead>
+              <tr style="border-bottom:1px solid var(--border)">
+                <th class="px-4 py-2 text-secondary" style="font-size:.75rem">Device</th>
+                <th class="px-3 py-2 text-secondary" style="font-size:.75rem">Site</th>
+                <th class="px-3 py-2 text-secondary" style="font-size:.75rem">Score</th>
+                <th class="px-3 py-2 text-secondary" style="font-size:.75rem">Progress</th>
+                <th class="px-3 py-2"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in device_scores %}
+              <tr style="border-bottom:1px solid var(--border)">
+                <td class="px-4 py-2 fw-medium" style="font-size:.88rem">{{ row.device.hostname }}</td>
+                <td class="px-3 py-2">
+                  <span class="badge bg-secondary" style="font-size:.7rem">{{ row.device.site|capfirst }}</span>
+                </td>
+                <td class="px-3 py-2">
+                  <span style="font-size:.95rem;font-weight:700;color:{% if row.score >= 90 %}var(--green){% elif row.score >= 70 %}var(--amber){% else %}var(--red){% endif %}">
+                    {{ row.score }}%
+                  </span>
+                </td>
+                <td class="px-3 py-2" style="min-width:120px">
+                  <div class="score-bar">
+                    <div class="score-bar-fill"
+                         style="width:{{ row.score }}%;background:{% if row.score >= 90 %}var(--green){% elif row.score >= 70 %}var(--amber){% else %}var(--red){% endif %}">
+                    </div>
+                  </div>
+                  <div class="text-secondary mt-1" style="font-size:.7rem">
+                    {{ row.pass }}/{{ row.total }} pass · {{ row.fail }} fail
+                  </div>
+                </td>
+                <td class="px-3 py-2">
+                  <a href="{% url 'security:compliance_device' row.device.pk %}"
+                     class="btn btn-sm btn-outline-secondary" style="font-size:.7rem;padding:.2rem .55rem">
+                    Detail
+                  </a>
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <p class="text-secondary text-center py-4 mb-0">No results yet.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Recent failures -->
+  <div class="col-lg-5">
+    <div class="card" style="background:var(--surface);border:1px solid var(--border)">
+      <div class="card-header" style="background:transparent;border-bottom:1px solid var(--border)">
+        <i class="bi bi-x-circle me-2" style="color:var(--red)"></i>
+        <span class="fw-medium">Recent Failures</span>
+      </div>
+      <div class="card-body p-0">
+        {% if recent_fails %}
+        <ul class="list-group list-group-flush">
+          {% for r in recent_fails %}
+          <li class="list-group-item" style="background:transparent;border-color:var(--border);padding:.5rem .75rem">
+            <div class="d-flex justify-content-between align-items-start">
+              <div>
+                <span class="fw-medium" style="font-size:.85rem">{{ r.rule.name }}</span>
+                <div class="text-secondary" style="font-size:.75rem">
+                  {{ r.device.hostname }}
+                  <span class="badge bg-secondary ms-1" style="font-size:.65rem">{{ r.rule.category }}</span>
+                </div>
+              </div>
+              <span class="badge"
+                    style="font-size:.65rem;background:{% if r.rule.severity == 'critical' %}rgba(239,68,68,.2);color:#f87171{% elif r.rule.severity == 'warning' %}rgba(245,158,11,.2);color:#fbbf24{% else %}rgba(59,130,246,.2);color:#60a5fa{% endif %}">
+                {{ r.rule.severity|upper }}
+              </span>
+            </div>
+          </li>
+          {% endfor %}
+        </ul>
+        {% else %}
+        <p class="text-secondary text-center py-4 mb-0">
+          <i class="bi bi-check-circle-fill text-success me-1" style="font-size:1.5rem;display:block;margin-bottom:.5rem"></i>
+          No failures found.
+        </p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const CSRF = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+const btn = document.getElementById('btn-run-all-compliance');
+if (btn) {
+  btn.addEventListener('click', async () => {
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Running…';
+    try {
+      const resp = await fetch('/api/security/compliance/run-all/', {
+        method: 'POST',
+        headers: { 'X-CSRFToken': CSRF, 'Content-Type': 'application/json' },
+        body: '{}',
+      });
+      const d = await resp.json();
+      if (resp.ok) {
+        btn.innerHTML = '<i class="bi bi-check2 me-1"></i>Dispatched';
+        setTimeout(() => location.reload(), 3000);
+      } else {
+        btn.innerHTML = '⚠ Error';
+        btn.disabled = false;
+      }
+    } catch(e) {
+      btn.innerHTML = '⚠ Error';
+      btn.disabled = false;
+    }
+  });
+}
+</script>
+{% endblock %}

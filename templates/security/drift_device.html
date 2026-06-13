@@ -1,0 +1,204 @@
+{% extends 'base.html' %}
+{% block title %}{{ device.hostname }} Drift — NetOps Platform{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'security:home' %}">Security</a></li>
+<li class="breadcrumb-item"><a href="{% url 'security:drift' %}">Drift Detection</a></li>
+<li class="breadcrumb-item active">{{ device.hostname }}</li>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+  .diff-block {
+    background: #0d1117;
+    border: 1px solid var(--border);
+    border-radius: .5rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .8rem;
+    color: #e2e8f0;
+    padding: 1rem;
+    overflow-x: auto;
+    max-height: 600px;
+    overflow-y: auto;
+  }
+  .diff-add  { color: #4ade80; display: block; }
+  .diff-del  { color: #f87171; display: block; }
+  .diff-meta { color: #60a5fa; opacity: .7; display: block; }
+  .diff-ctx  { color: #94a3b8; display: block; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h1 class="h3 mb-1 fw-semibold">
+      <i class="bi bi-file-diff me-2" style="color:var(--amber)"></i>{{ device.hostname }} — Drift
+    </h1>
+    <p class="text-secondary mb-0">
+      {{ device.management_ip }} · {{ device.get_site_display }} · {{ device.get_device_type_display }}
+    </p>
+  </div>
+  <div class="d-flex gap-2">
+    <a href="{% url 'security:drift' %}" class="btn btn-outline-secondary btn-sm">
+      <i class="bi bi-arrow-left me-1"></i>Back
+    </a>
+    {% if request.user.is_engineer or request.user.is_superuser %}
+    <button class="btn btn-primary btn-sm" id="btn-run-drift" data-id="{{ device.pk }}">
+      <i class="bi bi-play-fill me-1"></i>Re-scan
+    </button>
+    {% endif %}
+  </div>
+</div>
+
+{% if latest %}
+<!-- Latest result summary -->
+<div class="row g-3 mb-4">
+  <div class="col-auto">
+    <div class="stat-card">
+      <div class="stat-label">Status</div>
+      <div class="stat-value" style="font-size:1.1rem">
+        {% if latest.status == 'clean' %}
+        <span style="color:var(--green)">✓ Clean</span>
+        {% elif latest.status == 'drifted' %}
+        <span style="color:var(--amber)">⚠ Drifted</span>
+        {% else %}
+        <span style="color:var(--red)">✗ Error</span>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-auto">
+    <div class="stat-card">
+      <div class="stat-label">Drift Lines</div>
+      <div class="stat-value" style="color:{% if latest.drift_lines > 0 %}var(--amber){% else %}var(--green){% endif %}">
+        {{ latest.drift_lines }}
+      </div>
+    </div>
+  </div>
+  <div class="col-auto">
+    <div class="stat-card">
+      <div class="stat-label">Golden Config</div>
+      <div class="stat-value" style="font-size:.95rem">
+        {% if latest.golden_config %}{{ latest.golden_config.name }} v{{ latest.golden_config.version }}{% else %}—{% endif %}
+      </div>
+    </div>
+  </div>
+  <div class="col-auto">
+    <div class="stat-card">
+      <div class="stat-label">Checked</div>
+      <div class="stat-value" style="font-size:.9rem">{{ latest.checked_at|date:"Y-m-d H:i" }}</div>
+    </div>
+  </div>
+</div>
+
+{% if latest.error_message %}
+<div class="alert alert-danger mb-4"
+     style="background:rgba(239,68,68,.15);border-color:var(--red)">
+  <i class="bi bi-exclamation-triangle-fill me-2"></i>{{ latest.error_message }}
+</div>
+{% endif %}
+
+<div class="row g-4">
+  <!-- Diff -->
+  <div class="col-xl-8">
+    <div class="card" style="background:var(--surface);border:1px solid var(--border)">
+      <div class="card-header" style="background:transparent;border-bottom:1px solid var(--border)">
+        <i class="bi bi-file-diff me-2" style="color:var(--green)"></i>
+        <span class="fw-medium">Unified Diff (golden → running)</span>
+        {% if latest.drift_lines == 0 %}
+        <span class="badge bg-success ms-2" style="font-size:.72rem">No changes</span>
+        {% else %}
+        <span class="badge bg-warning text-dark ms-2" style="font-size:.72rem">{{ latest.drift_lines }} lines changed</span>
+        {% endif %}
+      </div>
+      <div class="card-body p-0">
+        {% if latest.diff %}
+        <div class="diff-block rounded-0 m-0" id="diff-block"></div>
+        <script>
+          (function() {
+            const raw = "{{ latest.diff|escapejs }}";
+            const div = document.getElementById('diff-block');
+            const lines = raw.split('\n');
+            div.innerHTML = lines.map(line => {
+              const e = line.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+              if (line.startsWith('+++') || line.startsWith('---'))
+                return `<span class="diff-meta">${e}</span>`;
+              if (line.startsWith('@@'))
+                return `<span class="diff-meta">${e}</span>`;
+              if (line.startsWith('+'))
+                return `<span class="diff-add">${e}</span>`;
+              if (line.startsWith('-'))
+                return `<span class="diff-del">${e}</span>`;
+              return `<span class="diff-ctx">${e}</span>`;
+            }).join('');
+          })();
+        </script>
+        {% else %}
+        <div class="text-center py-4 text-secondary">
+          <i class="bi bi-check-circle-fill text-success d-block mb-2" style="font-size:2rem"></i>
+          Running-config matches the golden baseline — no drift detected.
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- History -->
+  <div class="col-xl-4">
+    <div class="card" style="background:var(--surface);border:1px solid var(--border)">
+      <div class="card-header" style="background:transparent;border-bottom:1px solid var(--border)">
+        <span class="fw-medium">Scan History</span>
+      </div>
+      <div class="card-body p-0">
+        <ul class="list-group list-group-flush">
+          {% for dr in history %}
+          <li class="list-group-item d-flex justify-content-between align-items-center"
+              style="background:{% if forloop.first %}rgba(59,130,246,.07){% else %}transparent{% endif %};border-color:var(--border);padding:.5rem .75rem">
+            <div>
+              {% if dr.status == 'clean' %}
+              <span class="text-success fw-medium" style="font-size:.85rem">✓ Clean</span>
+              {% elif dr.status == 'drifted' %}
+              <span class="text-warning fw-medium" style="font-size:.85rem">⚠ Drifted ({{ dr.drift_lines }})</span>
+              {% else %}
+              <span class="text-danger fw-medium" style="font-size:.85rem">✗ Error</span>
+              {% endif %}
+              <div class="text-secondary" style="font-size:.72rem">{{ dr.checked_at|date:"Y-m-d H:i" }}</div>
+            </div>
+            {% if forloop.first %}
+            <span class="badge bg-primary" style="font-size:.65rem">Latest</span>
+            {% endif %}
+          </li>
+          {% endfor %}
+        </ul>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% else %}
+<div class="card text-center py-5" style="background:var(--surface);border:1px solid var(--border)">
+  <i class="bi bi-file-diff d-block mb-2 text-secondary" style="font-size:2.5rem"></i>
+  <p class="text-secondary">No drift scan results yet for this device.</p>
+  {% if request.user.is_engineer or request.user.is_superuser %}
+  <button class="btn btn-primary btn-sm" id="btn-run-drift" data-id="{{ device.pk }}">
+    <i class="bi bi-play-fill me-1"></i>Run Drift Scan
+  </button>
+  {% endif %}
+</div>
+{% endif %}
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const CSRF = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+document.getElementById('btn-run-drift')?.addEventListener('click', async function() {
+  const id = this.dataset.id;
+  this.disabled = true;
+  this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Scanning…';
+  const resp = await fetch(`/api/security/drift/run/${id}/`, {
+    method: 'POST', headers: { 'X-CSRFToken': CSRF, 'Content-Type': 'application/json' }, body: '{}'
+  });
+  if (resp.ok) { this.innerHTML = '✓ Dispatched'; setTimeout(() => location.reload(), 5000); }
+  else { this.innerHTML = '⚠ Error'; this.disabled = false; }
+});
+</script>
+{% endblock %}

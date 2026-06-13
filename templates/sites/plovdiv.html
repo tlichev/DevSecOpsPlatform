@@ -1,0 +1,72 @@
+{% extends 'base.html' %}
+{% block title %}Plovdiv Site — NetOps Platform{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item active">Plovdiv</li>
+{% endblock %}
+
+{% block content %}
+<div class="page-header d-flex align-items-start justify-content-between">
+    <div>
+        <div class="d-flex align-items-center gap-3 mb-1">
+            <span style="display:inline-block;width:14px;height:14px;border-radius:50%;background:#a855f7;box-shadow:0 0 8px #a855f7"></span>
+            <h1 style="margin:0">Plovdiv Site</h1>
+        </div>
+        <p>WAN: 4.2.2.32/27 · LAN: 172.16.1.0/29 · Mgmt: 192.168.100.30–34</p>
+    </div>
+    <span class="badge-status badge-up">Online</span>
+</div>
+
+<div class="row g-3 mb-4">
+    <div class="col-6 col-md-3">
+        <div class="stat-card stat-purple"><div class="stat-icon"><i class="bi bi-hdd-rack-fill"></i></div><div class="stat-body"><div class="stat-value">5</div><div class="stat-label">Devices</div></div></div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="stat-card stat-green"><div class="stat-icon"><i class="bi bi-diagram-2"></i></div><div class="stat-body"><div class="stat-value" id="plovdiv-up-count">—</div><div class="stat-label">Up</div></div></div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="stat-card stat-amber"><div class="stat-icon"><i class="bi bi-bell"></i></div><div class="stat-body"><div class="stat-value" id="plovdiv-alerts">—</div><div class="stat-label">Alerts</div></div></div>
+    </div>
+    <div class="col-6 col-md-3">
+        <div class="stat-card stat-blue"><div class="stat-icon"><i class="bi bi-shield-check"></i></div><div class="stat-body"><div class="stat-value" id="plovdiv-compliance">—</div><div class="stat-label">Compliance</div></div></div>
+    </div>
+</div>
+
+<div class="card mb-4">
+    <div class="card-header"><span class="card-header-title"><i class="bi bi-hdd-rack"></i> Site Devices</span></div>
+    <div class="card-body">
+        <div class="row g-3">
+            {% for dev in devices %}
+            <div class="col-12 col-md-6">
+                <a href="{% url 'inventory:device_detail' dev.pk %}" class="text-decoration-none">
+                    <div class="device-card">
+                        <div class="device-card-header">
+                            <div><div class="device-hostname">{{ dev.hostname }}</div><div class="device-type">{{ dev.get_device_type_display }}</div></div>
+                            <span class="badge-status badge-{{ dev.status }}">{{ dev.status }}</span>
+                        </div>
+                        <div class="device-ip">{{ dev.ip_address }}</div>
+                    </div>
+                </a>
+            </div>
+            {% empty %}
+            <div class="col-12"><div class="empty-state"><i class="bi bi-hdd-rack"></i><p>Device data available after Step 3</p></div></div>
+            {% endfor %}
+        </div>
+    </div>
+</div>
+
+<div class="card">
+    <div class="card-header"><span class="card-header-title"><i class="bi bi-diagram-3"></i> Network Addressing</span></div>
+    <div class="card-body">
+        <table class="table-dark-custom">
+            <thead><tr><th>Segment</th><th>Network</th><th>Gateway</th><th>Notes</th></tr></thead>
+            <tbody>
+                <tr><td>WAN</td><td class="mono">4.2.2.32/27</td><td class="mono">4.2.2.33</td><td>To ISP1</td></tr>
+                <tr><td>LAN</td><td class="mono">172.16.1.0/29</td><td class="mono">172.16.1.1</td><td>Branch LAN</td></tr>
+                <tr><td>Mgmt</td><td class="mono">192.168.100.0/24</td><td>—</td><td>OOB management</td></tr>
+                <tr><td>Loopback (R_Plovdiv)</td><td class="mono">120.0.0.1/32</td><td>—</td><td>OSPF RID</td></tr>
+            </tbody>
+        </table>
+    </div>
+</div>
+{% endblock %}

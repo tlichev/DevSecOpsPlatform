@@ -1,0 +1,49 @@
+global:
+  resolve_timeout: 5m
+  smtp_smarthost: 'localhost:25'
+  smtp_from: 'netops-alerts@enterprise.local'
+
+route:
+  group_by: ['alertname', 'site']
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+  receiver: django-webhook
+
+  routes:
+    # Critical alerts: shorter repeat interval
+    - match:
+        severity: critical
+      receiver: django-webhook
+      repeat_interval: 1h
+      continue: true
+
+    # DeviceDown: remind operators every 30 minutes while firing
+    - match:
+        alertname: DeviceDown
+      receiver: django-webhook
+      repeat_interval: 30m
+
+receivers:
+  - name: django-webhook
+    webhook_configs:
+      - url: 'http://django:8000/api/alerts/webhook/'
+        send_resolved: true
+        http_config:
+          follow_redirects: true
+
+# Suppress interface/error alerts for an instance that is completely unreachable
+inhibit_rules:
+  - source_match:
+      alertname: DeviceDown
+      severity: critical
+    target_match_re:
+      alertname: 'InterfaceDown|HighInterfaceErrors'
+    equal: ['instance']
+
+  # Suppress warnings when a critical alert for the same site+alertname is firing
+  - source_matchers:
+      - severity = critical
+    target_matchers:
+      - severity = warning
+    equal: ['alertname', 'site']

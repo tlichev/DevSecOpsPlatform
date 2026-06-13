@@ -1,0 +1,50 @@
+groups:
+  - name: network_device_alerts
+    interval: 30s
+    rules:
+      - alert: DeviceDown
+        expr: up{job=~"snmp_.*"} == 0
+        for: 2m
+        labels:
+          severity: critical
+        annotations:
+          summary: "Network device {{ $labels.instance }} is down"
+          description: "SNMP target {{ $labels.instance }} (site: {{ $labels.site }}) has been unreachable for more than 2 minutes."
+
+      - alert: InterfaceDown
+        expr: ifOperStatus{ifOperStatus="2"} == 1
+        for: 1m
+        labels:
+          severity: warning
+        annotations:
+          summary: "Interface down on {{ $labels.instance }}"
+          description: "Interface {{ $labels.ifDescr }} on {{ $labels.instance }} is operationally down."
+
+      - alert: HighInterfaceErrors
+        expr: rate(ifInErrors[5m]) > 10 or rate(ifOutErrors[5m]) > 10
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High interface errors on {{ $labels.instance }}"
+          description: "Interface {{ $labels.ifDescr }} on {{ $labels.instance }} is experiencing >10 errors/sec."
+
+  - name: system_alerts
+    rules:
+      - alert: HighCPULoad
+        expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU load on {{ $labels.instance }}"
+          description: "CPU load is above 85% for 5+ minutes."
+
+      - alert: DjangoDown
+        expr: up{job="django"} == 0
+        for: 1m
+        labels:
+          severity: critical
+        annotations:
+          summary: "NetOps Django application is down"
+          description: "The Django application has been unreachable for more than 1 minute."

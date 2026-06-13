@@ -1,0 +1,40 @@
+! =============================================================================
+! Management ACL — restrict SSH/SNMP to OOB management network
+! Generated for : {{ hostname }}  ({{ ip_address }})
+! Site          : {{ site_label }}
+! =============================================================================
+
+{% set mgmt_net = mgmt_network | default('192.168.100.0') %}
+{% set mgmt_wc  = mgmt_wildcard | default('0.0.0.255') %}
+{% set acl_name = acl_name | default('MGMT_ACCESS') %}
+
+! ── Standard ACL for VTY/SNMP access ─────────────────────────────────────────
+ip access-list standard {{ acl_name }}
+ remark Allow management from OOB network only
+ 10 permit {{ mgmt_net }} {{ mgmt_wc }}
+ 20 deny   any log
+
+! ── Extended ACL for inbound management interface traffic ────────────────────
+ip access-list extended PROTECT_MGMT_IN
+ remark Allow ICMP from management network
+ 10 permit icmp {{ mgmt_net }} {{ mgmt_wc }} host {{ ip_address }}
+ remark Allow SSH from management network
+ 20 permit tcp {{ mgmt_net }} {{ mgmt_wc }} host {{ ip_address }} eq 22
+ remark Allow SNMP from management network
+ 30 permit udp {{ mgmt_net }} {{ mgmt_wc }} host {{ ip_address }} eq 161
+ remark Deny everything else to management IP
+ 40 deny   ip any host {{ ip_address }} log
+ 50 permit ip any any
+
+! ── Apply ACLs to VTY lines ──────────────────────────────────────────────────
+line vty 0 4
+ access-class {{ acl_name }} in
+line vty 5 15
+ access-class {{ acl_name }} in
+
+! ── SNMP source restriction ───────────────────────────────────────────────────
+{% if snmp_community %}
+snmp-server community {{ snmp_community }} RO {{ acl_name }}
+snmp-server host {{ mgmt_net | replace('.0','') | replace('/24','') }}.1 version 2c {{ snmp_community }}
+{% endif %}
+!

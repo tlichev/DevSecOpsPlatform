@@ -1,0 +1,53 @@
+! =============================================================================
+! Branch Router — Loopback + OSPF + Uplink
+! Generated for : {{ hostname }}  ({{ ip_address }})
+! Site          : {{ site_label }}
+! Loopback      : {{ loopback_ip if loopback_ip else 'NOT SET' }}/32
+! =============================================================================
+
+{% if device_type not in ['router'] %}
+! WARNING: Template targets router devices. Detected: {{ device_type }}
+{% endif %}
+
+{% set process_id = ospf_process_id | default(1) %}
+
+! ── Loopback — OSPF Router-ID ─────────────────────────────────────────────────
+{% if loopback_ip %}
+interface Loopback0
+ description OSPF-RouterID-{{ loopback_ip }}
+ ip address {{ loopback_ip }} 255.255.255.255
+ ip ospf {{ process_id }} area 0
+ no shutdown
+{% else %}
+! Loopback not configured for this device.
+{% endif %}
+
+! ── Uplink to L2 switch ───────────────────────────────────────────────────────
+interface Ethernet0/0
+ description UPLINK-to-L2S_{{ site | upper }}
+ ip address {{ ip_address }} 255.255.255.0
+ ip ospf {{ process_id }} area 0
+ ip ospf hello-interval 10
+ ip ospf dead-interval 40
+ ip ospf authentication message-digest
+ ip ospf message-digest-key 1 md5 OspfKey@{{ site }}2024
+ no shutdown
+
+! ── OSPF ─────────────────────────────────────────────────────────────────────
+router ospf {{ process_id }}
+{% if loopback_ip %}
+ router-id {{ loopback_ip }}
+{% else %}
+ router-id {{ ip_address }}
+{% endif %}
+ auto-cost reference-bandwidth 10000
+ passive-interface default
+ no passive-interface Ethernet0/0
+ {% if loopback_ip %}
+ network {{ loopback_ip }} 0.0.0.0 area 0
+ {% endif %}
+ network 192.168.100.0 0.0.0.255 area 0
+ timers spf 1 5 10
+ timers lsa arrival 100
+ area 0 authentication message-digest
+!

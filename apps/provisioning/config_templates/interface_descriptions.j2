@@ -1,0 +1,71 @@
+! =============================================================================
+! Interface Descriptions — Topology-Aware
+! Generated for : {{ hostname }}  ({{ ip_address }})
+! Site          : {{ site_label }}
+! =============================================================================
+
+{% if device_type == 'firewall_primary' %}
+! ── Primary Firewall: Sofia_PRIM / Burgas_PRIM / Plovdiv_PRIM ────────────────
+interface GigabitEthernet0/0
+ description WAN-to-SW_{{ site | upper }}-e0/1 [{{ wan_ip if wan_ip else 'unset' }}]
+ no shutdown
+
+interface GigabitEthernet0/1
+ description LAN-172.16.1.0/29-{{ site | upper }}-branch
+ no shutdown
+
+interface GigabitEthernet0/6
+ description HA-link-to-{{ site | upper }}_SEC-Gi0/0
+ no shutdown
+
+{% elif device_type == 'firewall_secondary' %}
+! ── Secondary Firewall: Sofia_SEC / Burgas_SEC / Plovdiv_SEC ─────────────────
+interface GigabitEthernet0/0
+ description UPLINK-to-L2S_{{ site | upper }}-e0/1
+ no shutdown
+
+interface GigabitEthernet0/1
+ description HA-link-to-{{ site | upper }}_PRIM-Gi0/6
+ no shutdown
+
+{% elif device_type == 'l2_switch' %}
+! ── L2 Access Switch: L2S_Sofia / L2S_Burgas / L2S_Plovdiv ──────────────────
+interface Ethernet0/0
+ description DOWNLINK-to-R_{{ site | upper }}-e0/0
+ no shutdown
+
+interface Ethernet0/1
+ description UPLINK-to-{{ site | upper }}_PRIM-Gi0/6
+ no shutdown
+
+interface Ethernet0/2
+ description SPARE-RESERVED
+ shutdown
+
+{% elif device_type == 'router' %}
+! ── Branch Router: R_Sofia / R_Burgas / R_Plovdiv ────────────────────────────
+interface Ethernet0/0
+ description UPLINK-to-L2S_{{ site | upper }}-e0/0
+ no shutdown
+
+{% if loopback_ip %}
+interface Loopback0
+ description OSPF-RouterID-{{ loopback_ip }}
+ no shutdown
+{% endif %}
+
+{% elif device_type == 'wan_switch' %}
+! ── WAN Distribution Switch: SW_SOFIA / SW_BURGAS / SW_PLOVDIV ───────────────
+interface Ethernet0/0
+ description UPLINK-to-ISP1
+ no shutdown
+
+interface Ethernet0/1
+ description DOWNLINK-to-{{ site | upper }}_PRIM-Gi0/0 [WAN]
+ no shutdown
+
+interface Ethernet0/2
+ description SPARE-RESERVED
+ shutdown
+{% endif %}
+!

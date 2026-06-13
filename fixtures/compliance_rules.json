@@ -1,0 +1,206 @@
+[
+  {
+    "model": "security.compliancerule",
+    "pk": 1,
+    "fields": {
+      "name": "SSH Version 2 Enabled",
+      "description": "Devices must use SSHv2. SSHv1 has known vulnerabilities.",
+      "category": "SSH",
+      "pattern": "ip ssh version 2",
+      "match_means_pass": true,
+      "device_types": [],
+      "severity": "critical",
+      "is_active": true,
+      "remediation": "ip ssh version 2",
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "security.compliancerule",
+    "pk": 2,
+    "fields": {
+      "name": "Telnet Disabled on VTY",
+      "description": "VTY lines must not permit Telnet. Only SSH should be allowed.",
+      "category": "SSH",
+      "pattern": "transport input telnet",
+      "match_means_pass": false,
+      "device_types": [],
+      "severity": "critical",
+      "is_active": true,
+      "remediation": "line vty 0 4\n transport input ssh",
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "security.compliancerule",
+    "pk": 3,
+    "fields": {
+      "name": "AAA Authentication Configured",
+      "description": "AAA new-model must be configured for centralized authentication.",
+      "category": "AAA",
+      "pattern": "aaa new-model",
+      "match_means_pass": true,
+      "device_types": [],
+      "severity": "critical",
+      "is_active": true,
+      "remediation": "aaa new-model\naaa authentication login default local",
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "security.compliancerule",
+    "pk": 4,
+    "fields": {
+      "name": "NTP Server Configured",
+      "description": "A reliable NTP source is required for log correlation and cert validation.",
+      "category": "NTP",
+      "pattern": "ntp server",
+      "match_means_pass": true,
+      "device_types": [],
+      "severity": "warning",
+      "is_active": true,
+      "remediation": "ntp server 192.168.100.1 prefer",
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "security.compliancerule",
+    "pk": 5,
+    "fields": {
+      "name": "SNMP Community Restricted to ACL",
+      "description": "SNMP RO community must be restricted to the management ACL MGMT_ACCESS.",
+      "category": "SNMP",
+      "pattern": "snmp-server community .+ RO MGMT_ACCESS",
+      "match_means_pass": true,
+      "device_types": [],
+      "severity": "warning",
+      "is_active": true,
+      "remediation": "snmp-server community netops-ro RO MGMT_ACCESS",
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "security.compliancerule",
+    "pk": 6,
+    "fields": {
+      "name": "Syslog Host Configured",
+      "description": "Devices must send logs to a remote syslog server.",
+      "category": "Logging",
+      "pattern": "logging host",
+      "match_means_pass": true,
+      "device_types": [],
+      "severity": "warning",
+      "is_active": true,
+      "remediation": "logging host 192.168.100.1 transport udp port 514",
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "security.compliancerule",
+    "pk": 7,
+    "fields": {
+      "name": "Service Password Encryption Enabled",
+      "description": "Type 7 password obfuscation must be enabled to prevent plaintext passwords in config.",
+      "category": "Passwords",
+      "pattern": "service password-encryption",
+      "match_means_pass": true,
+      "device_types": [],
+      "severity": "warning",
+      "is_active": true,
+      "remediation": "service password-encryption",
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "security.compliancerule",
+    "pk": 8,
+    "fields": {
+      "name": "Enable Secret Configured (Not Enable Password)",
+      "description": "enable secret (MD5) must be used, not the weaker enable password.",
+      "category": "Passwords",
+      "pattern": "^enable password ",
+      "match_means_pass": false,
+      "device_types": [],
+      "severity": "critical",
+      "is_active": true,
+      "remediation": "no enable password\nenable secret <strong-secret>",
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "security.compliancerule",
+    "pk": 9,
+    "fields": {
+      "name": "Login Banner Configured",
+      "description": "A legal warning banner must be displayed at login.",
+      "category": "Banners",
+      "pattern": "banner (motd|login)",
+      "match_means_pass": true,
+      "device_types": [],
+      "severity": "info",
+      "is_active": true,
+      "remediation": "banner motd ^Unauthorized access prohibited.^",
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "security.compliancerule",
+    "pk": 10,
+    "fields": {
+      "name": "OSPF MD5 Authentication",
+      "description": "OSPF interfaces must use MD5 authentication to prevent route injection.",
+      "category": "Routing",
+      "pattern": "ip ospf authentication message-digest",
+      "match_means_pass": true,
+      "device_types": ["router", "firewall_primary", "firewall_secondary"],
+      "severity": "warning",
+      "is_active": true,
+      "remediation": "interface <uplink>\n ip ospf authentication message-digest\n ip ospf message-digest-key 1 md5 <key>",
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "security.compliancerule",
+    "pk": 11,
+    "fields": {
+      "name": "CDP Disabled on WAN Interfaces",
+      "description": "CDP must be disabled on any interface facing untrusted networks.",
+      "category": "Hardening",
+      "pattern": "no cdp enable",
+      "match_means_pass": true,
+      "device_types": ["firewall_primary", "firewall_secondary"],
+      "severity": "warning",
+      "is_active": true,
+      "remediation": "interface GigabitEthernet0/0\n no cdp enable",
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  },
+  {
+    "model": "security.compliancerule",
+    "pk": 12,
+    "fields": {
+      "name": "Timestamps on Log Messages",
+      "description": "Log messages must include timestamps for accurate incident correlation.",
+      "category": "Logging",
+      "pattern": "service timestamps log datetime",
+      "match_means_pass": true,
+      "device_types": [],
+      "severity": "info",
+      "is_active": true,
+      "remediation": "service timestamps log datetime msec localtime",
+      "created_at": "2024-01-01T00:00:00Z",
+      "updated_at": "2024-01-01T00:00:00Z"
+    }
+  }
+]

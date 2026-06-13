@@ -1,0 +1,26 @@
+[tool.bandit]
+exclude_dirs = ["apps/accounts/migrations", "apps/inventory/migrations",
+                "apps/provisioning/migrations", "apps/monitoring/migrations",
+                "apps/security/migrations", "staticfiles", "static"]
+skips = ["B101", "B105", "B106", "B311", "B603", "B607"]
+
+[tool.coverage.run]
+source = ["apps"]
+omit = [
+    "*/migrations/*",
+    "*/tests*.py",
+    "*/test_*.py",
+]
+
+[tool.coverage.report]
+show_missing = true
+skip_covered = false
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self\\.debug",
+    "raise AssertionError",
+    "raise NotImplementedError",
+    "if TYPE_CHECKING:",
+    "pass$",
+]

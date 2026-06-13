@@ -1,0 +1,134 @@
+{% extends 'base.html' %}
+{% block title %}Grafana Dashboards — NetOps Platform{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'monitoring:home' %}">Monitoring</a></li>
+<li class="breadcrumb-item active">Grafana Dashboards</li>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+  #grafana-frame {
+    width: 100%;
+    height: 70vh;
+    min-height: 520px;
+    border: none;
+    border-radius: 0 0 .5rem .5rem;
+    background: #111;
+  }
+  .dash-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: .45rem;
+    padding: .75rem 1rem;
+    cursor: pointer;
+    transition: border-color .15s, background .15s;
+    text-decoration: none;
+    color: var(--fg);
+    display: block;
+  }
+  .dash-card:hover, .dash-card.active {
+    border-color: var(--blue);
+    background: rgba(59,130,246,.07);
+    color: var(--fg);
+  }
+  .dash-card.active { border-color: var(--blue); }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h1 class="h3 mb-1 fw-semibold">
+      <i class="bi bi-bar-chart-line me-2" style="color:var(--amber)"></i>Grafana Dashboards
+    </h1>
+    <p class="text-secondary mb-0">
+      Embedded views · <a href="{{ grafana_url }}" target="_blank" rel="noopener"
+        style="color:var(--blue)">Open Grafana <i class="bi bi-box-arrow-up-right ms-1" style="font-size:.7rem"></i></a>
+    </p>
+  </div>
+</div>
+
+<div class="row g-4">
+
+  <!-- Sidebar: dashboard list -->
+  <div class="col-lg-3">
+    <div class="card" style="background:var(--surface);border:1px solid var(--border)">
+      <div class="card-header" style="background:transparent;border-bottom:1px solid var(--border)">
+        <span class="fw-medium text-secondary" style="font-size:.75rem;text-transform:uppercase;letter-spacing:.05em">
+          Dashboards
+        </span>
+      </div>
+      <div class="card-body p-2 d-flex flex-column gap-2">
+        {% for dash in dashboard_list %}
+        <a href="{% url 'monitoring:dashboards' %}?uid={{ dash.uid }}"
+           class="dash-card {% if embed_uid == dash.uid %}active{% endif %}">
+          <div class="fw-medium" style="font-size:.88rem">{{ dash.title }}</div>
+          <div class="text-secondary mt-1" style="font-size:.75rem">{{ dash.description }}</div>
+        </a>
+        {% endfor %}
+
+        <div style="border-top:1px solid var(--border);margin-top:.5rem;padding-top:.75rem">
+          <a href="{{ grafana_url }}" target="_blank" rel="noopener"
+             class="dash-card" style="border-style:dashed">
+            <div class="fw-medium" style="font-size:.85rem">
+              <i class="bi bi-box-arrow-up-right me-1"></i>Open Grafana
+            </div>
+            <div class="text-secondary mt-1" style="font-size:.73rem">Full UI with editing</div>
+          </a>
+        </div>
+      </div>
+    </div>
+
+    <!-- Quick links: Prometheus + AlertManager -->
+    <div class="mt-3 d-flex flex-column gap-2">
+      <a href="http://localhost:9090" target="_blank" rel="noopener"
+         class="btn btn-outline-secondary btn-sm w-100" style="font-size:.8rem">
+        <i class="bi bi-activity me-1"></i>Prometheus
+      </a>
+      <a href="http://localhost:9093" target="_blank" rel="noopener"
+         class="btn btn-outline-secondary btn-sm w-100" style="font-size:.8rem">
+        <i class="bi bi-bell me-1"></i>AlertManager
+      </a>
+    </div>
+  </div>
+
+  <!-- Iframe -->
+  <div class="col-lg-9">
+    {% for dash in dashboard_list %}
+    {% if embed_uid == dash.uid %}
+    <div class="card" style="background:var(--surface);border:1px solid var(--border)">
+      <div class="card-header d-flex justify-content-between align-items-center"
+           style="background:transparent;border-bottom:1px solid var(--border)">
+        <span>
+          <i class="bi bi-graph-up me-2" style="color:var(--blue)"></i>
+          <span class="fw-medium">{{ dash.title }}</span>
+        </span>
+        <a href="{{ dash.url }}" target="_blank" rel="noopener"
+           class="btn btn-sm btn-outline-secondary" style="font-size:.7rem">
+          <i class="bi bi-arrows-fullscreen me-1"></i>Full Screen
+        </a>
+      </div>
+      <iframe id="grafana-frame"
+              src="{{ dash.url }}?kiosk=tv&theme=dark&refresh=30s"
+              allowfullscreen
+              title="{{ dash.title }}">
+      </iframe>
+    </div>
+    {% endif %}
+    {% empty %}
+    <div class="card text-center py-5" style="background:var(--surface);border:1px solid var(--border)">
+      <p class="text-secondary">No dashboards configured.</p>
+    </div>
+    {% endfor %}
+
+    <!-- Fallback if no uid matched -->
+    {% if not embed_uid %}
+    <div class="card text-center py-5" style="background:var(--surface);border:1px solid var(--border)">
+      <i class="bi bi-bar-chart-line d-block mb-2 text-secondary" style="font-size:2.5rem"></i>
+      <p class="text-secondary">Select a dashboard from the left panel.</p>
+    </div>
+    {% endif %}
+  </div>
+
+</div>
+{% endblock %}

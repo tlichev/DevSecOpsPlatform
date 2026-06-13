@@ -1,0 +1,255 @@
+name: DevSecOps CI
+
+on:
+  push:
+    branches: [main, develop]
+  pull_request:
+    branches: [main]
+
+env:
+  PYTHON_VERSION: '3.11'
+  DJANGO_SETTINGS_MODULE: config.settings.test
+  SECRET_KEY: ci-placeholder-secret-key-not-for-production-xk9m2p
+  FIELD_ENCRYPTION_KEY: ''
+
+# ─────────────────────────────────────────────────────────────────────────────
+jobs:
+  # ── 1. Lint ──────────────────────────────────────────────────────────────────
+  lint:
+    name: Lint (flake8)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install flake8
+        run: pip install flake8
+
+      - name: Run flake8
+        run: |
+          flake8 apps/ api/ config/ \
+            --max-line-length=120 \
+            --extend-ignore=E203,W503 \
+            --exclude=migrations,__pycache__ \
+            --statistics \
+            --count
+
+  # ── 2. SAST – Bandit ─────────────────────────────────────────────────────────
+  bandit:
+    name: SAST – Bandit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install Bandit
+        run: pip install 'bandit[toml]'
+
+      - name: Run Bandit scan
+        run: |
+          bandit -r apps/ api/ config/ \
+            --skip B101,B105,B106,B311,B603,B607 \
+            --severity-level medium \
+            --confidence-level medium \
+            --format json \
+            --output bandit-report.json \
+            --exit-zero
+
+      - name: Fail on HIGH severity issues
+        run: |
+          python - <<'PYEOF'
+          import json, sys
+          report = json.load(open('bandit-report.json'))
+          issues  = report.get('results', [])
+          highs   = [i for i in issues if i['issue_severity'] == 'HIGH']
+          mediums = [i for i in issues if i['issue_severity'] == 'MEDIUM']
+          print(f"=== Bandit Security Report ===")
+          print(f"Total issues : {len(issues)}")
+          print(f"  HIGH       : {len(highs)}")
+          print(f"  MEDIUM     : {len(mediums)}")
+          if highs:
+              print("\nHIGH severity issues:")
+              for i in highs:
+                  print(f"  [{i['issue_id']}] {i['filename']}:{i['line_number']}")
+                  print(f"       {i['issue_text']}")
+              sys.exit(1)
+          PYEOF
+
+      - name: Upload Bandit report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: bandit-report
+          path: bandit-report.json
+          retention-days: 14
+
+  # ── 3. Dependency Audit – pip-audit ──────────────────────────────────────────
+  pip-audit:
+    name: Dependency Audit – pip-audit
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install pip-audit
+        run: pip install pip-audit
+
+      - name: Run pip-audit
+        run: |
+          pip-audit \
+            --requirement requirements.txt \
+            --format json \
+            --output pip-audit-report.json \
+            --progress-spinner off \
+            || true
+
+      - name: Report vulnerabilities
+        run: |
+          python - <<'PYEOF'
+          import json, sys
+          report = json.load(open('pip-audit-report.json'))
+          deps   = report.get('dependencies', [])
+          vulns  = [(d['name'], d['version'], v['id'], v.get('fix_versions', []))
+                    for d in deps for v in d.get('vulns', [])]
+          print(f"=== pip-audit Report ===")
+          print(f"Packages scanned     : {len(deps)}")
+          print(f"Vulnerable packages  : {len(set(v[0] for v in vulns))}")
+          print(f"Total vulnerabilities: {len(vulns)}")
+          if vulns:
+              print("\nVulnerabilities found:")
+              for name, ver, vid, fixes in vulns:
+                  fix_str = ', '.join(fixes) if fixes else 'no fix available'
+                  print(f"  {name}=={ver}  [{vid}]  fix: {fix_str}")
+              sys.exit(1)
+          PYEOF
+
+      - name: Upload pip-audit report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pip-audit-report
+          path: pip-audit-report.json
+          retention-days: 14
+
+  # ── 4. Django Tests + Coverage ───────────────────────────────────────────────
+  test:
+    name: Django Tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt coverage
+
+      - name: Run tests with coverage
+        env:
+          DJANGO_SETTINGS_MODULE: config.settings.test
+          SECRET_KEY: ${{ env.SECRET_KEY }}
+          FIELD_ENCRYPTION_KEY: ${{ env.FIELD_ENCRYPTION_KEY }}
+        run: |
+          coverage run \
+            manage.py test apps/ \
+            --settings=config.settings.test \
+            --verbosity=2 \
+            --noinput
+
+      - name: Coverage report
+        run: |
+          coverage report --show-missing
+          coverage report --fail-under=50
+
+      - name: Generate XML coverage
+        run: coverage xml -o coverage.xml
+
+      - name: Upload coverage report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: coverage.xml
+          retention-days: 14
+
+  # ── 5. Container Scan – Trivy ─────────────────────────────────────────────────
+  trivy:
+    name: Container Scan – Trivy
+    runs-on: ubuntu-latest
+    needs: test
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Build Docker image
+        run: |
+          docker build \
+            --cache-from type=gha \
+            --cache-to   type=gha,mode=max \
+            -t devsecops-platform:ci \
+            .
+
+      - name: Trivy – table output (informational)
+        uses: aquasecurity/trivy-action@0.20.0
+        with:
+          image-ref: devsecops-platform:ci
+          format: table
+          severity: CRITICAL,HIGH
+          exit-code: '0'
+
+      - name: Trivy – SARIF output
+        uses: aquasecurity/trivy-action@0.20.0
+        with:
+          image-ref: devsecops-platform:ci
+          format: sarif
+          output: trivy-results.sarif
+          severity: CRITICAL,HIGH
+          exit-code: '0'
+
+      - name: Upload Trivy SARIF report
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: trivy-sarif
+          path: trivy-results.sarif
+          retention-days: 14
+
+      - name: Fail on CRITICAL vulnerabilities
+        run: |
+          python - <<'PYEOF'
+          import json, sys
+          try:
+              data = json.load(open('trivy-results.sarif'))
+              runs = data.get('runs', [])
+              results = [r for run in runs for r in run.get('results', [])]
+              criticals = [r for r in results
+                           if r.get('level') == 'error']
+              print(f"=== Trivy Container Scan ===")
+              print(f"Total findings   : {len(results)}")
+              print(f"Critical (error) : {len(criticals)}")
+              if criticals:
+                  print("\nCritical CVEs:")
+                  for r in criticals[:10]:
+                      rule_id = r.get('ruleId', '')
+                      msg     = r.get('message', {}).get('text', '')[:120]
+                      print(f"  [{rule_id}] {msg}")
+                  sys.exit(1)
+          except Exception as e:
+              print(f"Could not parse SARIF: {e}")
+          PYEOF

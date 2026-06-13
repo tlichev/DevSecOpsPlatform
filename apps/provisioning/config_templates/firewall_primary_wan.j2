@@ -1,0 +1,74 @@
+! =============================================================================
+! Primary Firewall — WAN Interface + Policy
+! Generated for : {{ hostname }}  ({{ ip_address }})
+! Site          : {{ site_label }}  |  WAN: {{ wan_ip if wan_ip else 'NOT SET' }}/27
+! =============================================================================
+
+{% if device_type not in ['firewall_primary'] %}
+! WARNING: This template targets firewall_primary devices.
+! Detected device type: {{ device_type }}
+{% endif %}
+
+{% set wan_mask = '255.255.255.224' %}  {# /27 #}
+{% set lan_ip   = lan_gw | default('172.16.1.1') %}
+{% set lan_mask = '255.255.255.248' %}  {# /29 #}
+
+! ── WAN Interface ─────────────────────────────────────────────────────────────
+interface GigabitEthernet0/0
+ description WAN-{{ site | upper }}-to-ISP1
+{% if wan_ip %}
+ ip address {{ wan_ip }} {{ wan_mask }}
+{% else %}
+ ! ip address <WAN_IP> {{ wan_mask }}   ! SET THIS MANUALLY
+{% endif %}
+ ip access-group FILTER_WAN_IN in
+ ip access-group FILTER_WAN_OUT out
+ ip verify unicast source reachable-via rx
+ no cdp enable
+ no lldp transmit
+ no lldp receive
+ no ip proxy-arp
+ no shutdown
+
+! ── LAN Interface ─────────────────────────────────────────────────────────────
+interface GigabitEthernet0/1
+ description LAN-{{ site | upper }}-172.16.1.0/29
+ ip address {{ lan_ip }} {{ lan_mask }}
+ ip access-group FILTER_LAN_IN in
+ no cdp enable
+ no shutdown
+
+! ── HA Interface (to secondary FW) ───────────────────────────────────────────
+interface GigabitEthernet0/6
+ description HA-link-to-{{ site | upper }}_SEC
+ no ip address
+ no shutdown
+
+! ── WAN inbound ACL (deny all by default, permit established sessions) ────────
+ip access-list extended FILTER_WAN_IN
+ 10 deny   ip 10.0.0.0 0.255.255.255 any log
+ 20 deny   ip 172.16.0.0 0.15.255.255 any log
+ 30 deny   ip 192.168.0.0 0.0.255.255 any log
+ 40 deny   ip 127.0.0.0 0.255.255.255 any log
+ 50 permit icmp any any echo-reply
+ 60 permit tcp any any established
+ 70 permit udp any any range 1024 65535
+ 99 deny   ip any any log
+
+ip access-list extended FILTER_WAN_OUT
+ 10 permit ip 172.16.1.0 0.0.0.7 any
+ 20 permit ip host {{ ip_address }} any
+ 99 deny   ip any any log
+
+ip access-list extended FILTER_LAN_IN
+ 10 permit ip 172.16.1.0 0.0.0.7 any
+ 20 permit ip host {{ ip_address }} any
+ 99 deny   ip any any log
+
+! ── Default route to ISP ─────────────────────────────────────────────────────
+{% if default_gw is defined %}
+ip route 0.0.0.0 0.0.0.0 {{ default_gw }}
+{% else %}
+! ip route 0.0.0.0 0.0.0.0 <ISP_GATEWAY>   ! SET THIS MANUALLY
+{% endif %}
+!

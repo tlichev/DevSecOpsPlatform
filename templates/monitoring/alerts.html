@@ -1,0 +1,234 @@
+{% extends 'base.html' %}
+{% block title %}Alerts — NetOps Platform{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'monitoring:home' %}">Monitoring</a></li>
+<li class="breadcrumb-item active">Alerts</li>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+  .sev-badge-critical {
+    background: rgba(239,68,68,.2); color: #f87171;
+    border: 1px solid rgba(239,68,68,.4);
+    font-size: .7rem; font-weight: 700; padding: .2rem .55rem; border-radius: .3rem;
+  }
+  .sev-badge-warning {
+    background: rgba(245,158,11,.2); color: #fbbf24;
+    border: 1px solid rgba(245,158,11,.4);
+    font-size: .7rem; font-weight: 700; padding: .2rem .55rem; border-radius: .3rem;
+  }
+  .sev-badge-info {
+    background: rgba(59,130,246,.2); color: #60a5fa;
+    border: 1px solid rgba(59,130,246,.4);
+    font-size: .7rem; font-weight: 600; padding: .2rem .55rem; border-radius: .3rem;
+  }
+  .row-firing     { border-left: 2px solid var(--red); }
+  .row-resolved   { border-left: 2px solid var(--green); opacity: .75; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h1 class="h3 mb-1 fw-semibold">
+      <i class="bi bi-bell-fill me-2" style="color:var(--red)"></i>Alert Log
+    </h1>
+    <p class="text-secondary mb-0">
+      <strong style="color:var(--fg)">{{ total }}</strong> entries matching current filters.
+    </p>
+  </div>
+</div>
+
+<!-- Filters -->
+<form method="get" class="row g-2 mb-4 align-items-end">
+  <div class="col-md-4">
+    <input name="q" value="{{ q }}" type="text" class="form-control form-control-sm"
+           placeholder="Search alert name, instance, summary…"
+           style="background:var(--surface);color:var(--fg);border-color:var(--border)">
+  </div>
+  <div class="col-auto">
+    <select name="severity" class="form-select form-select-sm"
+            style="background:var(--surface);color:var(--fg);border-color:var(--border)">
+      <option value="" {% if not severity_filter %}selected{% endif %}>All severities</option>
+      <option value="critical" {% if severity_filter == 'critical' %}selected{% endif %}>🔴 Critical</option>
+      <option value="warning"  {% if severity_filter == 'warning'  %}selected{% endif %}>🟡 Warning</option>
+      <option value="info"     {% if severity_filter == 'info'     %}selected{% endif %}>🔵 Info</option>
+    </select>
+  </div>
+  <div class="col-auto">
+    <select name="status" class="form-select form-select-sm"
+            style="background:var(--surface);color:var(--fg);border-color:var(--border)">
+      <option value="" {% if not status_filter %}selected{% endif %}>All statuses</option>
+      <option value="firing"   {% if status_filter == 'firing'   %}selected{% endif %}>Firing</option>
+      <option value="resolved" {% if status_filter == 'resolved' %}selected{% endif %}>Resolved</option>
+    </select>
+  </div>
+  <div class="col-auto">
+    <select name="site" class="form-select form-select-sm"
+            style="background:var(--surface);color:var(--fg);border-color:var(--border)">
+      <option value="" {% if not site_filter %}selected{% endif %}>All sites</option>
+      {% for site in sites %}
+      <option value="{{ site }}" {% if site_filter == site %}selected{% endif %}>{{ site|capfirst }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="col-auto">
+    <select name="acked" class="form-select form-select-sm"
+            style="background:var(--surface);color:var(--fg);border-color:var(--border)">
+      <option value="" {% if not acked_filter %}selected{% endif %}>All (ack)</option>
+      <option value="no"  {% if acked_filter == 'no'  %}selected{% endif %}>Unacknowledged</option>
+      <option value="yes" {% if acked_filter == 'yes' %}selected{% endif %}>Acknowledged</option>
+    </select>
+  </div>
+  <div class="col-auto">
+    <button type="submit" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-funnel me-1"></i>Filter
+    </button>
+    {% if q or severity_filter or status_filter or site_filter or acked_filter %}
+    <a href="{% url 'monitoring:alerts' %}" class="btn btn-sm btn-outline-secondary ms-1">
+      <i class="bi bi-x-lg me-1"></i>Clear
+    </a>
+    {% endif %}
+  </div>
+</form>
+
+<!-- Table -->
+<div class="card" style="background:var(--surface);border:1px solid var(--border)">
+  <div class="card-body p-0">
+    {% if page_obj.object_list %}
+    <div class="table-responsive">
+      <table class="table mb-0" style="color:var(--fg)">
+        <thead>
+          <tr style="border-bottom:1px solid var(--border)">
+            <th class="px-4 py-3 text-secondary" style="font-size:.75rem">Severity</th>
+            <th class="px-3 py-3 text-secondary" style="font-size:.75rem">Alert Name</th>
+            <th class="px-3 py-3 text-secondary" style="font-size:.75rem">Instance</th>
+            <th class="px-3 py-3 text-secondary" style="font-size:.75rem">Site</th>
+            <th class="px-3 py-3 text-secondary" style="font-size:.75rem">Status</th>
+            <th class="px-3 py-3 text-secondary" style="font-size:.75rem">Ack</th>
+            <th class="px-3 py-3 text-secondary" style="font-size:.75rem">Started</th>
+            <th class="px-3 py-3 text-secondary" style="font-size:.75rem">Summary</th>
+            <th class="px-3 py-3"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for alert in page_obj %}
+          <tr class="row-{{ alert.status }} align-middle" style="border-bottom:1px solid var(--border)">
+            <td class="px-4 py-2">
+              <span class="sev-badge-{{ alert.severity }}">{{ alert.severity|upper }}</span>
+            </td>
+            <td class="px-3 py-2 fw-medium" style="font-size:.88rem">{{ alert.alertname }}</td>
+            <td class="px-3 py-2 text-secondary" style="font-size:.82rem">{{ alert.instance }}</td>
+            <td class="px-3 py-2">
+              {% if alert.site %}
+              <span class="badge bg-secondary" style="font-size:.7rem">{{ alert.site|capfirst }}</span>
+              {% else %}—{% endif %}
+            </td>
+            <td class="px-3 py-2">
+              {% if alert.status == 'firing' %}
+              <span class="badge bg-danger" style="font-size:.7rem">● Firing</span>
+              {% else %}
+              <span class="badge bg-success" style="font-size:.7rem">✓ Resolved</span>
+              {% endif %}
+            </td>
+            <td class="px-3 py-2 text-center">
+              {% if alert.acknowledged %}
+              <i class="bi bi-check-circle-fill text-success" title="Acked by {{ alert.acknowledged_by.username|default:'?' }} — {{ alert.ack_note }}"></i>
+              {% elif alert.status == 'firing' %}
+              <button class="btn btn-xs btn-outline-secondary ack-btn" data-id="{{ alert.pk }}"
+                      style="font-size:.65rem;padding:.1rem .4rem">Ack</button>
+              {% else %}—{% endif %}
+            </td>
+            <td class="px-3 py-2 text-secondary" style="font-size:.78rem"
+                title="{{ alert.starts_at }}">
+              {{ alert.starts_at|default:alert.received_at|timesince }} ago
+            </td>
+            <td class="px-3 py-2 text-secondary" style="font-size:.78rem;max-width:260px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">
+              {{ alert.summary }}
+            </td>
+            <td class="px-3 py-2">
+              <!-- Fingerprint tooltip -->
+              <span class="text-secondary" style="font-size:.65rem;font-family:monospace"
+                    title="{{ alert.fingerprint }}">{{ alert.fingerprint|slice:':8' }}…</span>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+    <!-- Pagination -->
+    {% if page_obj.has_other_pages %}
+    <div class="d-flex justify-content-between align-items-center px-4 py-3"
+         style="border-top:1px solid var(--border)">
+      <span class="text-secondary" style="font-size:.8rem">
+        Page {{ page_obj.number }} of {{ page_obj.paginator.num_pages }}
+      </span>
+      <nav>
+        <ul class="pagination pagination-sm mb-0" style="gap:.25rem">
+          {% if page_obj.has_previous %}
+          <li class="page-item">
+            <a class="page-link" href="?page={{ page_obj.previous_page_number }}&q={{ q }}&severity={{ severity_filter }}&status={{ status_filter }}&site={{ site_filter }}&acked={{ acked_filter }}"
+               style="background:var(--surface);border-color:var(--border);color:var(--fg)">&laquo; Prev</a>
+          </li>
+          {% endif %}
+          {% for num in page_obj.paginator.page_range %}
+            {% if page_obj.number == num %}
+            <li class="page-item active">
+              <span class="page-link" style="background:var(--blue);border-color:var(--blue)">{{ num }}</span>
+            </li>
+            {% elif num > page_obj.number|add:'-3' and num < page_obj.number|add:'3' %}
+            <li class="page-item">
+              <a class="page-link" href="?page={{ num }}&q={{ q }}&severity={{ severity_filter }}&status={{ status_filter }}&site={{ site_filter }}&acked={{ acked_filter }}"
+                 style="background:var(--surface);border-color:var(--border);color:var(--fg)">{{ num }}</a>
+            </li>
+            {% endif %}
+          {% endfor %}
+          {% if page_obj.has_next %}
+          <li class="page-item">
+            <a class="page-link" href="?page={{ page_obj.next_page_number }}&q={{ q }}&severity={{ severity_filter }}&status={{ status_filter }}&site={{ site_filter }}&acked={{ acked_filter }}"
+               style="background:var(--surface);border-color:var(--border);color:var(--fg)">Next &raquo;</a>
+          </li>
+          {% endif %}
+        </ul>
+      </nav>
+    </div>
+    {% endif %}
+
+    {% else %}
+    <div class="text-center py-5 text-secondary">
+      <i class="bi bi-bell-slash d-block mb-2" style="font-size:2.5rem"></i>
+      No alerts match your filters.
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const CSRF = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+
+document.querySelectorAll('.ack-btn').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const id = btn.dataset.id;
+    const note = prompt('Acknowledgement note (optional):') ?? '';
+    try {
+      const resp = await fetch(`/api/monitoring/alerts/${id}/acknowledge/`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        body: JSON.stringify({ note }),
+      });
+      if (resp.ok) {
+        btn.closest('td').innerHTML =
+          '<i class="bi bi-check-circle-fill text-success" title="Acknowledged"></i>';
+      } else {
+        alert('Failed to acknowledge alert.');
+      }
+    } catch (e) {
+      alert('Network error: ' + e);
+    }
+  });
+});
+</script>
+{% endblock %}

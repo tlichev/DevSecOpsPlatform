@@ -1,0 +1,192 @@
+{% extends 'base.html' %}
+{% block title %}User Management — NetOps Platform{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'accounts:profile' %}">Profile</a></li>
+<li class="breadcrumb-item active">User Management</li>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+  .role-badge-admin    { background: rgba(239,68,68,.2);   color: #f87171; }
+  .role-badge-engineer { background: rgba(59,130,246,.2);  color: #60a5fa; }
+  .role-badge-readonly { background: rgba(100,116,139,.2); color: #94a3b8; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h1 class="h3 mb-1 fw-semibold">
+      <i class="bi bi-people-fill me-2" style="color:var(--blue)"></i>User Management
+    </h1>
+    <p class="text-secondary mb-0">{{ users|length }} account{{ users|length|pluralize }}</p>
+  </div>
+  <a href="/admin/accounts/user/add/" target="_blank" class="btn btn-primary btn-sm">
+    <i class="bi bi-person-plus-fill me-1"></i>Create User
+  </a>
+</div>
+
+<!-- Stat cards -->
+<div class="row g-3 mb-4">
+  {% for label, cls, count in role_stats %}
+  <div class="col-auto">
+    <div class="stat-card">
+      <div class="stat-label">{{ label }}</div>
+      <div class="stat-value" style="font-size:1.6rem">{{ count }}</div>
+    </div>
+  </div>
+  {% endfor %}
+</div>
+
+<div class="card" style="background:var(--surface);border:1px solid var(--border)">
+  <div class="card-body p-0">
+    <div class="table-responsive">
+      <table class="table mb-0" style="color:var(--fg)">
+        <thead>
+          <tr style="border-bottom:1px solid var(--border)">
+            <th class="px-4 py-3 text-secondary" style="font-size:.75rem">User</th>
+            <th class="px-3 py-3 text-secondary" style="font-size:.75rem">Email</th>
+            <th class="px-3 py-3 text-secondary" style="font-size:.75rem">Role</th>
+            <th class="px-3 py-3 text-secondary" style="font-size:.75rem">Status</th>
+            <th class="px-3 py-3 text-secondary" style="font-size:.75rem">Last Login</th>
+            <th class="px-3 py-3 text-secondary" style="font-size:.75rem">Joined</th>
+            <th class="px-3 py-3 text-secondary" style="font-size:.75rem">Actions</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for u in users %}
+          <tr style="border-bottom:1px solid var(--border)" class="align-middle" id="user-row-{{ u.pk }}">
+            <td class="px-4 py-2">
+              <div class="d-flex align-items-center gap-2">
+                <div style="width:32px;height:32px;border-radius:50%;
+                            background:linear-gradient(135deg,#3b82f6,#8b5cf6);
+                            display:flex;align-items:center;justify-content:center;
+                            font-size:.85rem;font-weight:700;color:#fff;flex-shrink:0">
+                  {{ u.username|first|upper }}
+                </div>
+                <div>
+                  <div class="fw-medium" style="font-size:.88rem">{{ u.username }}</div>
+                  {% if u.get_full_name %}
+                  <div class="text-secondary" style="font-size:.72rem">{{ u.get_full_name }}</div>
+                  {% endif %}
+                </div>
+                {% if u.pk == request.user.pk %}
+                <span class="badge bg-secondary ms-1" style="font-size:.62rem">You</span>
+                {% endif %}
+              </div>
+            </td>
+            <td class="px-3 py-2 text-secondary" style="font-size:.82rem">{{ u.email|default:"—" }}</td>
+            <td class="px-3 py-2">
+              <select class="form-select form-select-sm role-select"
+                      data-user-id="{{ u.pk }}"
+                      style="background:var(--surface);color:var(--fg);border:1px solid var(--border);
+                             font-size:.78rem;padding:.2rem .5rem;min-width:120px"
+                      {% if u.pk == request.user.pk %}disabled{% endif %}>
+                {% for val, display in role_choices %}
+                <option value="{{ val }}" {% if u.role == val %}selected{% endif %}>{{ display }}</option>
+                {% endfor %}
+              </select>
+            </td>
+            <td class="px-3 py-2" id="status-{{ u.pk }}">
+              {% if u.is_active %}
+              <span class="badge bg-success" style="font-size:.7rem">Active</span>
+              {% else %}
+              <span class="badge bg-danger" style="font-size:.7rem">Inactive</span>
+              {% endif %}
+            </td>
+            <td class="px-3 py-2 text-secondary" style="font-size:.78rem">
+              {{ u.last_login|date:"Y-m-d H:i"|default:"Never" }}
+            </td>
+            <td class="px-3 py-2 text-secondary" style="font-size:.78rem">
+              {{ u.date_joined|date:"Y-m-d" }}
+            </td>
+            <td class="px-3 py-2">
+              {% if u.pk != request.user.pk %}
+              <button class="btn btn-sm toggle-active-btn
+                {% if u.is_active %}btn-outline-warning{% else %}btn-outline-success{% endif %}"
+                data-user-id="{{ u.pk }}"
+                data-active="{{ u.is_active|lower }}"
+                style="font-size:.72rem;padding:.2rem .55rem">
+                {% if u.is_active %}Deactivate{% else %}Activate{% endif %}
+              </button>
+              {% else %}
+              <span class="text-secondary" style="font-size:.75rem">—</span>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  </div>
+</div>
+
+<!-- Toast feedback -->
+<div class="position-fixed bottom-0 end-0 p-3" style="z-index:1100">
+  <div id="actionToast" class="toast align-items-center border-0" role="alert"
+       style="background:var(--surface);border:1px solid var(--border)!important;color:var(--fg)">
+    <div class="d-flex">
+      <div class="toast-body" id="toastMsg" style="font-size:.85rem"></div>
+      <button type="button" class="btn-close btn-close-white me-2 m-auto" data-bs-dismiss="toast"></button>
+    </div>
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const CSRF = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+
+function showToast(msg, ok) {
+  const el = document.getElementById('actionToast');
+  document.getElementById('toastMsg').textContent = msg;
+  el.style.borderColor = (ok ? 'var(--green)' : 'var(--red)') + '!important';
+  bootstrap.Toast.getOrCreateInstance(el).show();
+}
+
+// Role change — uses session auth + CSRF (standard for web requests)
+document.querySelectorAll('.role-select').forEach(sel => {
+  sel.addEventListener('change', async function() {
+    const id = this.dataset.userId;
+    const role = this.value;
+    const resp = await fetch(`/api/accounts/users/${id}/set-role/`, {
+      method: 'POST',
+      headers: { 'X-CSRFToken': CSRF, 'Content-Type': 'application/json' },
+      body: JSON.stringify({ role }),
+    });
+    if (resp.ok) {
+      showToast(`Role updated to "${role}"`, true);
+    } else {
+      showToast('Failed to update role', false);
+      location.reload();
+    }
+  });
+});
+
+// Toggle active
+document.querySelectorAll('.toggle-active-btn').forEach(btn => {
+  btn.addEventListener('click', async function() {
+    const id = this.dataset.userId;
+    const resp = await fetch(`/api/accounts/users/${id}/toggle-active/`, {
+      method: 'POST',
+      headers: { 'X-CSRFToken': CSRF, 'Content-Type': 'application/json' },
+      body: '{}',
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      const isActive = data.is_active;
+      const statusCell = document.getElementById(`status-${id}`);
+      statusCell.innerHTML = isActive
+        ? '<span class="badge bg-success" style="font-size:.7rem">Active</span>'
+        : '<span class="badge bg-danger" style="font-size:.7rem">Inactive</span>';
+      this.textContent = isActive ? 'Deactivate' : 'Activate';
+      this.className = `btn btn-sm ${isActive ? 'btn-outline-warning' : 'btn-outline-success'}`;
+      this.style.fontSize = '.72rem'; this.style.padding = '.2rem .55rem';
+      showToast(isActive ? 'User activated' : 'User deactivated', true);
+    } else {
+      showToast('Failed to toggle status', false);
+    }
+  });
+});
+</script>
+{% endblock %}

@@ -1,0 +1,280 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ device.hostname }} — NetOps Platform{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'inventory:device_list' %}">Inventory</a></li>
+<li class="breadcrumb-item active">{{ device.hostname }}</li>
+{% endblock %}
+
+{% block content %}
+
+<!-- ─── Header ─────────────────────────────────────────────────────────────── -->
+<div class="page-header d-flex align-items-start justify-content-between flex-wrap gap-3">
+    <div class="d-flex align-items-center gap-3">
+        <div style="width:48px;height:48px;border-radius:12px;
+                    background:{{ device.site_color }}22;
+                    display:flex;align-items:center;justify-content:center;
+                    font-size:22px;color:{{ device.site_color }}">
+            <i class="bi {{ device.device_type_icon }}"></i>
+        </div>
+        <div>
+            <h1 style="margin:0">{{ device.hostname }}</h1>
+            <p style="margin:0">
+                <span class="mono" style="color:#93c5fd">{{ device.ip_address }}</span>
+                &nbsp;·&nbsp;
+                <span class="badge-status"
+                      style="background:{{ device.site_color }}22;color:{{ device.site_color }}">
+                    {{ device.get_site_display }}
+                </span>
+                &nbsp;·&nbsp;
+                <span class="badge-status badge-{{ device.status }}">{{ device.status }}</span>
+            </p>
+        </div>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+        <button class="btn-ghost" id="btn-poll" data-device-id="{{ device.pk }}">
+            <i class="bi bi-arrow-repeat" id="poll-icon"></i> Poll Now
+        </button>
+        <a href="{% url 'provisioning:push_config' %}" class="btn-primary-dark">
+            <i class="bi bi-terminal-fill"></i> Provision
+        </a>
+    </div>
+</div>
+
+<!-- ─── Two-column layout ──────────────────────────────────────────────────── -->
+<div class="row g-3">
+
+    <!-- Left: Device info -->
+    <div class="col-12 col-lg-7">
+
+        <div class="card mb-3">
+            <div class="card-header">
+                <span class="card-header-title"><i class="bi bi-info-circle"></i> Device Information</span>
+            </div>
+            <div class="card-body" style="padding:0">
+                <table class="table-dark-custom" style="margin:0">
+                    <tbody>
+                        <tr><td style="color:var(--text-muted);width:180px">Hostname</td>
+                            <td style="font-weight:600">{{ device.hostname }}</td></tr>
+                        <tr><td style="color:var(--text-muted)">Management IP</td>
+                            <td class="mono">{{ device.ip_address }}</td></tr>
+                        {% if device.wan_ip %}
+                        <tr><td style="color:var(--text-muted)">WAN IP</td>
+                            <td class="mono">{{ device.wan_ip }}</td></tr>
+                        {% endif %}
+                        {% if device.loopback_ip %}
+                        <tr><td style="color:var(--text-muted)">Loopback / OSPF RID</td>
+                            <td class="mono">{{ device.loopback_ip }}</td></tr>
+                        {% endif %}
+                        <tr><td style="color:var(--text-muted)">Site</td>
+                            <td>
+                                <a href="{% url 'inventory:site_'|add:device.site %}"
+                                   style="color:{{ device.site_color }};font-weight:600">
+                                    {{ device.get_site_display }}
+                                </a>
+                            </td></tr>
+                        <tr><td style="color:var(--text-muted)">Device Type</td>
+                            <td>
+                                <i class="bi {{ device.device_type_icon }}" style="margin-right:6px"></i>
+                                {{ device.get_device_type_display }}
+                            </td></tr>
+                        <tr><td style="color:var(--text-muted)">Vendor</td>
+                            <td>{{ device.vendor }}</td></tr>
+                        <tr><td style="color:var(--text-muted)">Model</td>
+                            <td>{{ device.model|default:"—" }}</td></tr>
+                        <tr><td style="color:var(--text-muted)">OS Version</td>
+                            <td class="mono" style="color:#93c5fd">{{ device.os_version|default:"—" }}</td></tr>
+                        <tr><td style="color:var(--text-muted)">Status</td>
+                            <td><span class="badge-status badge-{{ device.status }}">{{ device.status }}</span></td></tr>
+                        <tr><td style="color:var(--text-muted)">Last Seen</td>
+                            <td>{{ device.last_seen|date:"Y-m-d H:i:s"|default:"Never polled" }}</td></tr>
+                        <tr><td style="color:var(--text-muted)">Last Polled</td>
+                            <td>{{ device.last_polled|date:"Y-m-d H:i:s"|default:"—" }}</td></tr>
+                        {% if device.description %}
+                        <tr><td style="color:var(--text-muted);vertical-align:top">Description</td>
+                            <td style="font-size:13px;color:var(--text-muted)">{{ device.description }}</td></tr>
+                        {% endif %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- SNMP / SSH config -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <span class="card-header-title"><i class="bi bi-terminal"></i> Connectivity</span>
+            </div>
+            <div class="card-body" style="padding:0">
+                <table class="table-dark-custom" style="margin:0">
+                    <tbody>
+                        <tr><td style="color:var(--text-muted);width:180px">SNMP Community</td>
+                            <td class="mono">{{ device.snmp_community }}</td></tr>
+                        <tr><td style="color:var(--text-muted)">SNMP Version</td>
+                            <td class="mono">{{ device.get_snmp_version_display }}</td></tr>
+                        <tr><td style="color:var(--text-muted)">SSH Username</td>
+                            <td class="mono">{{ device.ssh_username|default:"—" }}</td></tr>
+                        <tr><td style="color:var(--text-muted)">SSH Password</td>
+                            <td>
+                                {% if device.ssh_password %}
+                                <span class="badge-status badge-info">Set (encrypted)</span>
+                                {% else %}
+                                <span style="color:var(--text-muted)">Not set</span>
+                                {% endif %}
+                            </td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Compliance placeholder -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-header-title"><i class="bi bi-shield-check"></i> Compliance</span>
+                <a href="{% url 'security:compliance' %}" class="btn-ghost" style="padding:4px 12px;font-size:12px">
+                    Run checks <i class="bi bi-arrow-right"></i>
+                </a>
+            </div>
+            <div class="card-body">
+                <div class="empty-state" style="padding:24px 16px">
+                    <i class="bi bi-shield-check"></i>
+                    <p>Compliance checks available after Step 6</p>
+                </div>
+            </div>
+        </div>
+
+    </div>
+
+    <!-- Right: Recent events + metadata -->
+    <div class="col-12 col-lg-5">
+
+        <!-- Quick actions -->
+        <div class="card mb-3">
+            <div class="card-header">
+                <span class="card-header-title"><i class="bi bi-lightning-charge"></i> Quick Actions</span>
+            </div>
+            <div class="card-body d-flex flex-column gap-2">
+                <button class="btn-ghost w-100 justify-content-start" id="btn-poll-detail"
+                        data-device-id="{{ device.pk }}">
+                    <i class="bi bi-arrow-repeat"></i> Poll status now
+                </button>
+                <a href="{% url 'provisioning:push_config' %}?device={{ device.pk }}"
+                   class="btn-ghost w-100 justify-content-start">
+                    <i class="bi bi-terminal-fill"></i> Push configuration
+                </a>
+                <a href="{% url 'security:compliance' %}?device={{ device.pk }}"
+                   class="btn-ghost w-100 justify-content-start">
+                    <i class="bi bi-shield-check"></i> Run compliance check
+                </a>
+                <a href="{% url 'security:drift' %}?device={{ device.pk }}"
+                   class="btn-ghost w-100 justify-content-start">
+                    <i class="bi bi-file-diff"></i> Check config drift
+                </a>
+            </div>
+        </div>
+
+        <!-- Recent provisioning events -->
+        <div class="card">
+            <div class="card-header">
+                <span class="card-header-title">
+                    <i class="bi bi-journal-text"></i> Recent Provisioning
+                </span>
+                <a href="{% url 'provisioning:audit_log' %}" class="btn-ghost"
+                   style="padding:4px 12px;font-size:12px">
+                    All <i class="bi bi-arrow-right"></i>
+                </a>
+            </div>
+            <div class="card-body" style="padding:8px 16px">
+                {% if recent_events %}
+                {% for event in recent_events %}
+                <div class="audit-item">
+                    <i class="bi bi-{% if event.success %}check-circle-fill audit-status-ok{% else %}x-circle-fill audit-status-err{% endif %}"></i>
+                    <div class="audit-body">
+                        <div class="audit-device">{{ event.template_name|default:event.action }}</div>
+                        <div class="audit-action">by {{ event.user }}</div>
+                    </div>
+                    <div class="audit-time">{{ event.timestamp|date:"m-d H:i" }}</div>
+                </div>
+                {% endfor %}
+                {% else %}
+                <div class="empty-state" style="padding:28px 16px">
+                    <i class="bi bi-journal-text"></i>
+                    <p>No provisioning events yet</p>
+                </div>
+                {% endif %}
+            </div>
+        </div>
+
+        <!-- Metadata -->
+        <div class="card mt-3">
+            <div class="card-header">
+                <span class="card-header-title"><i class="bi bi-clock-history"></i> Record Info</span>
+            </div>
+            <div class="card-body" style="padding:0">
+                <table class="table-dark-custom" style="margin:0">
+                    <tbody>
+                        <tr><td style="color:var(--text-muted);width:120px">DB ID</td>
+                            <td class="mono">#{{ device.pk }}</td></tr>
+                        <tr><td style="color:var(--text-muted)">Created</td>
+                            <td>{{ device.created_at|date:"Y-m-d H:i" }}</td></tr>
+                        <tr><td style="color:var(--text-muted)">Updated</td>
+                            <td>{{ device.updated_at|date:"Y-m-d H:i" }}</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+    </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function pollDevice(deviceId, iconEl, btnEl) {
+    if (iconEl) iconEl.className = 'bi bi-arrow-repeat spin';
+    if (btnEl) btnEl.disabled = true;
+    fetch(`/api/devices/${deviceId}/poll/`, {
+        method: 'POST',
+        headers: { 'X-CSRFToken': getCookie('csrftoken') },
+        credentials: 'same-origin',
+    })
+    .then(r => r.json())
+    .then(data => {
+        showDevToast(data.message || 'Polling…', 'info');
+        setTimeout(() => location.reload(), 4000);
+    })
+    .catch(() => showDevToast('Poll request failed', 'error'))
+    .finally(() => {
+        setTimeout(() => {
+            if (iconEl) iconEl.className = 'bi bi-arrow-repeat';
+            if (btnEl) btnEl.disabled = false;
+        }, 3500);
+    });
+}
+
+document.getElementById('btn-poll')?.addEventListener('click', function() {
+    pollDevice(this.dataset.deviceId,
+               document.getElementById('poll-icon'), this);
+});
+document.getElementById('btn-poll-detail')?.addEventListener('click', function() {
+    pollDevice(this.dataset.deviceId, this.querySelector('i'), this);
+});
+
+function getCookie(n) {
+    const v = document.cookie.match('(^|;) ?' + n + '=([^;]*)(;|$)');
+    return v ? v[2] : '';
+}
+function showDevToast(msg, type) {
+    const div = document.createElement('div');
+    div.className = `flash flash-${type}`;
+    div.innerHTML = `<i class="bi bi-info-circle-fill"></i><span>${msg}</span>
+        <button class="flash-close" onclick="this.closest('.flash').remove()"><i class="bi bi-x-lg"></i></button>`;
+    let c = document.querySelector('.flash-container');
+    if (!c) { c = document.createElement('div'); c.className = 'flash-container'; document.querySelector('.page-content').prepend(c); }
+    c.appendChild(div);
+    setTimeout(() => div.remove(), 5000);
+}
+</script>
+<style>.spin { animation: spin .7s linear infinite; }</style>
+{% endblock %}

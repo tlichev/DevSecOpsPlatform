@@ -1,0 +1,38 @@
+! =============================================================================
+! NTP + Syslog Configuration
+! Generated for : {{ hostname }}  ({{ ip_address }})
+! Site          : {{ site_label }}
+! =============================================================================
+
+{% set ntp  = NTP_SERVER | default('192.168.100.1') %}
+{% set log  = SYSLOG_SERVER | default('192.168.100.1') %}
+{% set tz   = timezone | default('EET') %}
+{% set tz_offset = tz_offset_hours | default(2) %}
+
+! ── Timezone ─────────────────────────────────────────────────────────────────
+clock timezone {{ tz }} {{ tz_offset }}
+clock summer-time {{ tz }}DST recurring last Sun Mar 3:00 last Sun Oct 4:00
+
+! ── NTP ──────────────────────────────────────────────────────────────────────
+ntp server {{ ntp }} prefer
+ntp update-calendar
+ntp authenticate
+ntp authentication-key 1 md5 NtpKey@{{ site }}2024
+ntp trusted-key 1
+ntp source Loopback0
+ntp access-group peer 99
+ntp access-group serve-only 99
+
+! ── Logging ──────────────────────────────────────────────────────────────────
+service timestamps log datetime msec localtime
+service timestamps debug datetime msec localtime
+
+logging buffered 16384 informational
+logging console critical
+logging monitor informational
+logging trap informational
+logging source-interface Loopback0
+logging host {{ log }} transport udp port 514
+logging facility local6
+logging on
+!

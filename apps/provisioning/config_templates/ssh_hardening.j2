@@ -1,0 +1,71 @@
+! =============================================================================
+! SSH Hardening Baseline
+! Generated for : {{ hostname }}  ({{ ip_address }})
+! Site          : {{ site_label }}
+! Type          : {{ device_type }}
+! =============================================================================
+
+service password-encryption
+no service telnet
+
+! ── SSH ───────────────────────────────────────────────────────────────────────
+ip ssh version 2
+ip ssh time-out 60
+ip ssh authentication-retries 3
+ip ssh dh min size 2048
+no ip ssh server algorithm encryption 3des-cbc
+no ip ssh server algorithm encryption aes128-cbc
+no ip ssh server algorithm encryption aes192-cbc
+no ip ssh server algorithm encryption aes256-cbc
+ip ssh server algorithm encryption aes128-ctr aes192-ctr aes256-ctr
+
+! ── Disable HTTP management ───────────────────────────────────────────────────
+no ip http server
+no ip http secure-server
+
+! ── VTY lines: SSH only ───────────────────────────────────────────────────────
+line vty 0 4
+ transport input ssh
+ login local
+ exec-timeout 10 0
+ session-timeout 15
+ access-class MGMT_ACCESS in
+line vty 5 15
+ transport input ssh
+ login local
+ exec-timeout 10 0
+ session-timeout 15
+ access-class MGMT_ACCESS in
+
+! ── Console timeout ───────────────────────────────────────────────────────────
+line con 0
+ exec-timeout 10 0
+ logging synchronous
+
+! ── AAA ──────────────────────────────────────────────────────────────────────
+aaa new-model
+aaa authentication login default local
+aaa authorization exec default local none
+aaa accounting exec default start-stop local
+
+! ── Password hardening ────────────────────────────────────────────────────────
+security passwords min-length 12
+login block-for 60 attempts 5 within 30
+login delay 2
+login on-failure log
+login on-success log
+
+! ── Local privilege user ──────────────────────────────────────────────────────
+! NOTE: Set the password via 'username {{ ssh_username }} privilege 15 secret <PASSWORD>'
+! after applying this template.
+{% if ssh_username %}
+username {{ ssh_username }} privilege 15 algorithm-type sha256 secret NetOps@{{ site }}2024!
+{% else %}
+username admin privilege 15 algorithm-type sha256 secret NetOps@{{ site }}2024!
+{% endif %}
+
+! ── Management ACL (allow 192.168.100.0/24 only) ─────────────────────────────
+ip access-list standard MGMT_ACCESS
+ 10 permit 192.168.100.0 0.0.0.255
+ 20 deny   any log
+!

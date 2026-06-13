@@ -1,0 +1,146 @@
+{% extends 'base.html' %}
+{% block title %}Drift Detection — NetOps Platform{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'security:home' %}">Security</a></li>
+<li class="breadcrumb-item active">Drift Detection</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h1 class="h3 mb-1 fw-semibold">
+      <i class="bi bi-file-diff me-2" style="color:var(--amber)"></i>Golden Config Drift Detection
+    </h1>
+    <p class="text-secondary mb-0">
+      Compare live running-config against the golden baseline for each device type.
+    </p>
+  </div>
+  {% if request.user.is_engineer or request.user.is_superuser %}
+  <button class="btn btn-primary btn-sm" id="btn-run-all-drift">
+    <i class="bi bi-play-fill me-1"></i>Run Drift Scan
+  </button>
+  {% endif %}
+</div>
+
+{% if golden_configs %}
+<div class="d-flex flex-wrap gap-2 mb-4">
+  <span class="text-secondary" style="font-size:.8rem;align-self:center">Golden configs:</span>
+  {% for gc in golden_configs %}
+  <span class="badge" style="background:rgba(59,130,246,.15);color:#60a5fa;border:1px solid rgba(59,130,246,.3);font-size:.75rem;padding:.3rem .6rem">
+    {{ gc.device_type }} v{{ gc.version }}
+  </span>
+  {% endfor %}
+  <a href="/admin/security/goldenconfig/" target="_blank"
+     class="btn btn-sm btn-outline-secondary" style="font-size:.73rem">
+    <i class="bi bi-pencil me-1"></i>Edit Golden Configs
+  </a>
+</div>
+{% else %}
+<div class="alert mb-4" style="background:rgba(245,158,11,.1);border:1px solid rgba(245,158,11,.3);border-radius:.5rem;color:var(--fg)">
+  <i class="bi bi-exclamation-triangle me-2" style="color:var(--amber)"></i>
+  No golden configs defined yet.
+  <a href="/admin/security/goldenconfig/add/" class="ms-2" style="color:var(--amber)">Create one in Django Admin</a>.
+</div>
+{% endif %}
+
+<div class="card" style="background:var(--surface);border:1px solid var(--border)">
+  <div class="card-body p-0">
+    {% if drift_rows %}
+    <div class="table-responsive">
+      <table class="table mb-0" style="color:var(--fg)">
+        <thead>
+          <tr style="border-bottom:1px solid var(--border)">
+            <th class="px-4 py-3 text-secondary" style="font-size:.75rem">Device</th>
+            <th class="px-3 py-3 text-secondary" style="font-size:.75rem">Site</th>
+            <th class="px-3 py-3 text-secondary" style="font-size:.75rem">Type</th>
+            <th class="px-3 py-3 text-secondary" style="font-size:.75rem">Golden</th>
+            <th class="px-3 py-3 text-secondary" style="font-size:.75rem">Status</th>
+            <th class="px-3 py-3 text-secondary" style="font-size:.75rem">Drift Lines</th>
+            <th class="px-3 py-3 text-secondary" style="font-size:.75rem">Checked</th>
+            <th class="px-3 py-3"></th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for dr in drift_rows %}
+          <tr style="border-bottom:1px solid var(--border)" class="align-middle">
+            <td class="px-4 py-2 fw-medium" style="font-size:.9rem">{{ dr.device.hostname }}</td>
+            <td class="px-3 py-2">
+              <span class="badge bg-secondary" style="font-size:.7rem">{{ dr.device.site|capfirst }}</span>
+            </td>
+            <td class="px-3 py-2 text-secondary" style="font-size:.78rem">{{ dr.device.get_device_type_display }}</td>
+            <td class="px-3 py-2 text-secondary" style="font-size:.78rem">
+              {% if dr.golden_config %}{{ dr.golden_config.name }} v{{ dr.golden_config.version }}{% else %}—{% endif %}
+            </td>
+            <td class="px-3 py-2">
+              {% if dr.status == 'clean' %}
+              <span class="badge bg-success" style="font-size:.72rem">✓ Clean</span>
+              {% elif dr.status == 'drifted' %}
+              <span class="badge bg-warning text-dark" style="font-size:.72rem">⚠ Drifted</span>
+              {% else %}
+              <span class="badge bg-danger" style="font-size:.72rem">✗ Error</span>
+              {% endif %}
+            </td>
+            <td class="px-3 py-2">
+              {% if dr.drift_lines > 0 %}
+              <span style="color:var(--amber);font-weight:700">{{ dr.drift_lines }}</span>
+              <span class="text-secondary" style="font-size:.75rem"> lines</span>
+              {% else %}
+              <span class="text-secondary">—</span>
+              {% endif %}
+            </td>
+            <td class="px-3 py-2 text-secondary" style="font-size:.78rem" title="{{ dr.checked_at }}">
+              {{ dr.checked_at|timesince }} ago
+            </td>
+            <td class="px-3 py-2 d-flex gap-1">
+              <a href="{% url 'security:drift_device' dr.device.pk %}"
+                 class="btn btn-sm btn-outline-secondary" style="font-size:.7rem;padding:.2rem .55rem">
+                Diff
+              </a>
+              {% if request.user.is_engineer or request.user.is_superuser %}
+              <button class="btn btn-sm btn-outline-primary run-drift-btn"
+                      data-id="{{ dr.device.pk }}"
+                      style="font-size:.7rem;padding:.2rem .55rem" title="Re-run drift scan">↺</button>
+              {% endif %}
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center py-5 text-secondary">
+      <i class="bi bi-file-diff d-block mb-2" style="font-size:2.5rem"></i>
+      No drift results yet. Define golden configs and run a drift scan.
+    </div>
+    {% endif %}
+  </div>
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const CSRF = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+
+document.getElementById('btn-run-all-drift')?.addEventListener('click', async function() {
+  this.disabled = true;
+  this.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Scanning…';
+  const resp = await fetch('/api/security/drift/run-all/', {
+    method: 'POST', headers: { 'X-CSRFToken': CSRF, 'Content-Type': 'application/json' }, body: '{}'
+  });
+  if (resp.ok) { this.innerHTML = '✓ Dispatched'; setTimeout(() => location.reload(), 5000); }
+  else { this.innerHTML = '⚠ Error'; this.disabled = false; }
+});
+
+document.querySelectorAll('.run-drift-btn').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const id = btn.dataset.id;
+    btn.disabled = true; btn.textContent = '…';
+    const resp = await fetch(`/api/security/drift/run/${id}/`, {
+      method: 'POST', headers: { 'X-CSRFToken': CSRF, 'Content-Type': 'application/json' }, body: '{}'
+    });
+    btn.textContent = resp.ok ? '✓' : '✗';
+    setTimeout(() => { btn.textContent = '↺'; btn.disabled = false; }, 3000);
+  });
+});
+</script>
+{% endblock %}

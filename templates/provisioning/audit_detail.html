@@ -1,0 +1,153 @@
+{% extends 'base.html' %}
+{% block title %}Audit #{{ log.pk }} — NetOps Platform{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'provisioning:home' %}">Provisioning</a></li>
+<li class="breadcrumb-item"><a href="{% url 'provisioning:audit_log' %}">Audit Log</a></li>
+<li class="breadcrumb-item active">#{{ log.pk }}</li>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+  .config-block {
+    background: #0d1117;
+    border: 1px solid var(--border);
+    border-radius: .5rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .8rem;
+    color: #e2e8f0;
+    padding: 1rem;
+    white-space: pre;
+    overflow-x: auto;
+    max-height: 440px;
+    overflow-y: auto;
+  }
+  .diff-add  { color: #4ade80; }
+  .diff-del  { color: #f87171; }
+  .diff-meta { color: #60a5fa; opacity: .7; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h1 class="h3 mb-1 fw-semibold">
+      <i class="bi bi-journal-bookmark me-2" style="color:var(--amber)"></i>Audit Entry #{{ log.pk }}
+    </h1>
+    <p class="text-secondary mb-0">{{ log.action }}</p>
+  </div>
+  <a href="{% url 'provisioning:audit_log' %}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Back to Audit Log
+  </a>
+</div>
+
+<!-- Meta row -->
+<div class="row g-3 mb-4">
+  <div class="col-sm-6 col-xl-3">
+    <div class="stat-card">
+      <div class="stat-label">Device</div>
+      <div class="stat-value" style="font-size:1.1rem">{{ log.device.hostname }}</div>
+      <div class="text-secondary" style="font-size:.75rem">{{ log.device.management_ip }}</div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <div class="stat-card">
+      <div class="stat-label">Template</div>
+      <div class="stat-value" style="font-size:1rem">
+        <code style="color:var(--blue)">{{ log.template_name }}</code>
+      </div>
+    </div>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <div class="stat-card">
+      <div class="stat-label">Status</div>
+      <div class="stat-value" style="font-size:1.1rem">
+        {% if log.status == 'success' %}
+        <span style="color:var(--green)">✓ Success</span>
+        {% elif log.status == 'failed' %}
+        <span style="color:var(--red)">✗ Failed</span>
+        {% else %}
+        <span style="color:var(--amber)">⌛ Pending</span>
+        {% endif %}
+      </div>
+      {% if log.execution_time %}
+      <div class="text-secondary" style="font-size:.75rem">{{ log.duration_display }}</div>
+      {% endif %}
+    </div>
+  </div>
+  <div class="col-sm-6 col-xl-3">
+    <div class="stat-card">
+      <div class="stat-label">Pushed By</div>
+      <div class="stat-value" style="font-size:1rem">{{ log.user.username|default:"system" }}</div>
+      <div class="text-secondary" style="font-size:.75rem">{{ log.timestamp|date:"Y-m-d H:i:s" }}</div>
+    </div>
+  </div>
+</div>
+
+{% if log.error_message %}
+<div class="alert alert-danger mb-4" style="background:rgba(239,68,68,.15);border-color:var(--red)">
+  <i class="bi bi-exclamation-triangle-fill me-2"></i>
+  <strong>Error:</strong> {{ log.error_message }}
+</div>
+{% endif %}
+
+{% if log.task_id %}
+<p class="text-secondary mb-4" style="font-size:.8rem">
+  <i class="bi bi-cpu me-1"></i>Celery Task ID: <code>{{ log.task_id }}</code>
+</p>
+{% endif %}
+
+<div class="row g-4">
+
+  <!-- Config sent -->
+  <div class="col-lg-6">
+    <div class="card" style="background:var(--surface);border:1px solid var(--border)">
+      <div class="card-header" style="background:transparent;border-bottom:1px solid var(--border)">
+        <i class="bi bi-code-slash me-2" style="color:var(--purple)"></i>
+        <span class="fw-medium">Config Sent</span>
+      </div>
+      <div class="card-body p-0">
+        {% if log.config_sent %}
+        <pre class="config-block rounded-0 m-0">{{ log.config_sent }}</pre>
+        {% else %}
+        <p class="text-secondary text-center py-4 mb-0">No config recorded.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Diff -->
+  <div class="col-lg-6">
+    <div class="card" style="background:var(--surface);border:1px solid var(--border)">
+      <div class="card-header" style="background:transparent;border-bottom:1px solid var(--border)">
+        <i class="bi bi-file-diff me-2" style="color:var(--green)"></i>
+        <span class="fw-medium">Config Diff (before → after)</span>
+      </div>
+      <div class="card-body p-0">
+        {% if log.config_diff %}
+        <pre class="config-block rounded-0 m-0" id="diff-block"></pre>
+        <script>
+          (function() {
+            const raw = {{ log.config_diff|escapejs|safe }};
+            const pre = document.getElementById('diff-block');
+            const lines = raw.split('\n');
+            pre.innerHTML = lines.map(line => {
+              if (line.startsWith('+')) return '<span class="diff-add">' + escHtml(line) + '</span>';
+              if (line.startsWith('-')) return '<span class="diff-del">' + escHtml(line) + '</span>';
+              if (line.startsWith('@') || line.startsWith('---') || line.startsWith('+++'))
+                return '<span class="diff-meta">' + escHtml(line) + '</span>';
+              return escHtml(line);
+            }).join('\n');
+            function escHtml(s) {
+              return s.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+            }
+          })();
+        </script>
+        {% else %}
+        <p class="text-secondary text-center py-4 mb-0">No diff recorded.</p>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

@@ -1,0 +1,200 @@
+{% extends 'base.html' %}
+{% block title %}Provisioning — NetOps Platform{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item active">Provisioning</li>{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h1 class="h3 mb-1 fw-semibold">
+      <i class="bi bi-terminal-fill me-2" style="color:var(--blue)"></i>Configuration Provisioning
+    </h1>
+    <p class="text-secondary mb-0">Push Jinja2 templates to Cisco devices via Netmiko + Celery.</p>
+  </div>
+  <a href="{% url 'provisioning:push_config' %}" class="btn btn-primary">
+    <i class="bi bi-send me-1"></i>Push Config
+  </a>
+</div>
+
+<!-- Stats -->
+<div class="row g-3 mb-4">
+  <div class="col-6 col-xl-3">
+    <div class="stat-card border-top-blue">
+      <div class="stat-label">Total Pushes</div>
+      <div class="stat-value">{{ stats.total_pushes }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-xl-3">
+    <div class="stat-card border-top-green">
+      <div class="stat-label">Successful</div>
+      <div class="stat-value" style="color:var(--green)">{{ stats.successful }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-xl-3">
+    <div class="stat-card border-top-red">
+      <div class="stat-label">Failed</div>
+      <div class="stat-value" style="color:var(--red)">{{ stats.failed }}</div>
+    </div>
+  </div>
+  <div class="col-6 col-xl-3">
+    <div class="stat-card border-top-purple">
+      <div class="stat-label">Templates</div>
+      <div class="stat-value">
+        <span style="color:var(--purple)">{{ stats.db_templates }}</span>
+        <span class="text-secondary" style="font-size:.75rem"> DB /</span>
+        <span> {{ stats.file_templates }}</span>
+        <span class="text-secondary" style="font-size:.75rem"> file</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="row g-4">
+
+  <!-- Template Library -->
+  <div class="col-lg-6">
+    <div class="card" style="background:var(--surface);border:1px solid var(--border)">
+      <div class="card-header d-flex justify-content-between align-items-center"
+           style="background:transparent;border-bottom:1px solid var(--border)">
+        <span class="fw-medium">
+          <i class="bi bi-file-earmark-code me-2" style="color:var(--blue)"></i>Template Library
+        </span>
+        <a href="/admin/provisioning/provisioningtemplate/add/"
+           class="btn btn-sm btn-outline-secondary" style="font-size:.75rem">
+          <i class="bi bi-plus-lg me-1"></i>New DB Template
+        </a>
+      </div>
+      <div class="card-body p-0">
+
+        {% if file_templates %}
+        <div class="px-3 pt-3 pb-1">
+          <div class="text-secondary" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.06em">
+            File templates (config_templates/)
+          </div>
+        </div>
+        <ul class="list-group list-group-flush">
+          {% for t in file_templates %}{% if t.source == 'file' %}
+          <li class="list-group-item d-flex justify-content-between align-items-center"
+              style="background:transparent;border-color:var(--border);padding:.5rem .75rem">
+            <div>
+              <code style="color:var(--blue);font-size:.8rem">{{ t.name }}</code>
+              {% if t.device_type %}
+              <span class="badge bg-secondary ms-2" style="font-size:.65rem">{{ t.device_type }}</span>
+              {% endif %}
+            </div>
+            <a href="{% url 'provisioning:push_config' %}?template={{ t.name }}"
+               class="btn btn-sm btn-outline-primary" style="font-size:.7rem;padding:.2rem .55rem">
+              Use
+            </a>
+          </li>
+          {% endif %}{% endfor %}
+        </ul>
+        {% endif %}
+
+        {% if db_templates %}
+        <div class="px-3 pt-3 pb-1">
+          <div class="text-secondary" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.06em">
+            Database templates
+          </div>
+        </div>
+        <ul class="list-group list-group-flush">
+          {% for t in db_templates %}
+          <li class="list-group-item d-flex justify-content-between align-items-center"
+              style="background:transparent;border-color:var(--border);padding:.5rem .75rem">
+            <div>
+              <span class="fw-medium" style="font-size:.9rem">{{ t.name }}</span>
+              {% if t.device_type %}
+              <span class="badge" style="background:var(--blue);font-size:.65rem;margin-left:.3rem">
+                {{ t.device_type }}
+              </span>
+              {% endif %}
+              {% if t.site %}
+              <span class="badge bg-secondary" style="font-size:.65rem;margin-left:.2rem">{{ t.site }}</span>
+              {% endif %}
+            </div>
+            <div class="d-flex gap-1">
+              <a href="{% url 'provisioning:push_config' %}?template={{ t.name }}"
+                 class="btn btn-sm btn-outline-primary" style="font-size:.7rem;padding:.2rem .55rem">
+                Use
+              </a>
+              <a href="/admin/provisioning/provisioningtemplate/{{ t.pk }}/change/"
+                 class="btn btn-sm btn-outline-secondary" style="font-size:.7rem;padding:.2rem .55rem">
+                Edit
+              </a>
+            </div>
+          </li>
+          {% endfor %}
+        </ul>
+        {% endif %}
+
+        {% if not file_templates and not db_templates %}
+        <p class="text-secondary text-center py-5">
+          <i class="bi bi-inbox d-block mb-2" style="font-size:2rem"></i>No templates found.
+        </p>
+        {% endif %}
+
+      </div>
+    </div>
+  </div>
+
+  <!-- Recent Activity -->
+  <div class="col-lg-6">
+    <div class="card" style="background:var(--surface);border:1px solid var(--border)">
+      <div class="card-header d-flex justify-content-between align-items-center"
+           style="background:transparent;border-bottom:1px solid var(--border)">
+        <span class="fw-medium">
+          <i class="bi bi-clock-history me-2" style="color:var(--amber)"></i>Recent Activity
+        </span>
+        <a href="{% url 'provisioning:audit_log' %}"
+           class="btn btn-sm btn-outline-secondary" style="font-size:.75rem">View All</a>
+      </div>
+      <div class="card-body p-0">
+        {% if recent_logs %}
+        <div class="table-responsive">
+          <table class="table mb-0 table-sm" style="color:var(--fg)">
+            <thead>
+              <tr style="border-bottom:1px solid var(--border)">
+                <th class="px-3 py-2 text-secondary" style="font-size:.75rem;font-weight:500">Device</th>
+                <th class="px-2 py-2 text-secondary" style="font-size:.75rem;font-weight:500">Template</th>
+                <th class="px-2 py-2 text-secondary" style="font-size:.75rem;font-weight:500">Status</th>
+                <th class="px-2 py-2 text-secondary" style="font-size:.75rem;font-weight:500">When</th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for log in recent_logs %}
+              <tr style="border-bottom:1px solid var(--border)">
+                <td class="px-3 py-2">
+                  <a href="{% url 'provisioning:audit_detail' log.pk %}"
+                     class="text-decoration-none" style="color:var(--blue);font-size:.85rem">
+                    {{ log.device.hostname }}
+                  </a>
+                </td>
+                <td class="px-2 py-2 text-secondary" style="font-size:.8rem">{{ log.template_name }}</td>
+                <td class="px-2 py-2">
+                  {% if log.status == 'success' %}
+                  <span class="badge bg-success" style="font-size:.7rem">✓ OK</span>
+                  {% elif log.status == 'failed' %}
+                  <span class="badge bg-danger" style="font-size:.7rem">✗ Fail</span>
+                  {% else %}
+                  <span class="badge bg-warning text-dark" style="font-size:.7rem">⌛</span>
+                  {% endif %}
+                </td>
+                <td class="px-2 py-2 text-secondary" style="font-size:.75rem" title="{{ log.timestamp }}">
+                  {{ log.timestamp|timesince }} ago
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5 text-secondary">
+          <i class="bi bi-inbox d-block mb-2" style="font-size:2.5rem"></i>
+          No provisioning activity yet.
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

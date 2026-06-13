@@ -1,0 +1,181 @@
+{% extends 'base.html' %}
+{% block title %}Profile — NetOps Platform{% endblock %}
+{% block breadcrumb %}<li class="breadcrumb-item active">Profile</li>{% endblock %}
+
+{% block extra_css %}
+<style>
+  .avatar-lg {
+    width: 72px; height: 72px; border-radius: 50%;
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 1.8rem; font-weight: 700; color: #fff;
+    flex-shrink: 0;
+  }
+  .profile-nav .nav-link {
+    color: var(--text-muted);
+    border-radius: .4rem;
+    padding: .45rem .85rem;
+    font-size: .88rem;
+  }
+  .profile-nav .nav-link.active {
+    background: rgba(59,130,246,.15);
+    color: #60a5fa;
+  }
+  .stat-mini { text-align: center; padding: .75rem 1rem; }
+  .stat-mini .val { font-size: 1.4rem; font-weight: 800; line-height: 1; }
+  .stat-mini .lbl { font-size: .7rem; color: var(--text-muted); margin-top: .25rem; text-transform: uppercase; letter-spacing: .04em; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="row g-4">
+
+  <!-- ── Left column: identity card ── -->
+  <div class="col-lg-3">
+    <div class="card p-3 mb-3" style="background:var(--surface);border:1px solid var(--border)">
+      <div class="d-flex align-items-center gap-3 mb-3">
+        <div class="avatar-lg">{{ user.username|first|upper }}</div>
+        <div class="min-w-0">
+          <div class="fw-700 text-truncate" style="font-size:1.05rem">
+            {{ user.get_full_name|default:user.username }}
+          </div>
+          <div class="text-secondary text-truncate" style="font-size:.8rem">{{ user.email|default:"—" }}</div>
+          <span class="badge mt-1
+            {% if user.role == 'admin' %}bg-danger
+            {% elif user.role == 'engineer' %}bg-primary
+            {% else %}bg-secondary{% endif %}"
+            style="font-size:.68rem">
+            {{ user.get_role_display }}
+          </span>
+        </div>
+      </div>
+      <div class="row g-0 text-center" style="border-top:1px solid var(--border);padding-top:.75rem">
+        <div class="col stat-mini">
+          <div class="val" style="color:var(--blue)">{{ audit_count }}</div>
+          <div class="lbl">Audit<br>Actions</div>
+        </div>
+        <div class="col stat-mini" style="border-left:1px solid var(--border)">
+          <div class="val" style="color:var(--green)">
+            {% if user.last_login %}{{ user.last_login|date:"d" }}{% else %}—{% endif %}
+          </div>
+          <div class="lbl">Last<br>Login Day</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Account meta -->
+    <div class="card p-3" style="background:var(--surface);border:1px solid var(--border)">
+      <div class="text-secondary mb-2" style="font-size:.72rem;text-transform:uppercase;letter-spacing:.06em">Account</div>
+      <dl class="mb-0" style="font-size:.83rem">
+        <dt class="text-secondary mb-1">Username</dt>
+        <dd class="mb-2 font-monospace">{{ user.username }}</dd>
+        <dt class="text-secondary mb-1">Joined</dt>
+        <dd class="mb-2">{{ user.date_joined|date:"Y-m-d" }}</dd>
+        <dt class="text-secondary mb-1">Last Login</dt>
+        <dd class="mb-2">{{ user.last_login|date:"Y-m-d H:i"|default:"Never" }}</dd>
+        <dt class="text-secondary mb-1">Status</dt>
+        <dd class="mb-0">
+          {% if user.is_active %}
+          <span class="badge bg-success" style="font-size:.68rem">Active</span>
+          {% else %}
+          <span class="badge bg-danger" style="font-size:.68rem">Inactive</span>
+          {% endif %}
+        </dd>
+      </dl>
+    </div>
+  </div>
+
+  <!-- ── Right column: tabs ── -->
+  <div class="col-lg-9">
+    <ul class="nav profile-nav mb-3 gap-1" id="profileTab" role="tablist">
+      <li class="nav-item">
+        <a class="nav-link active" data-bs-toggle="tab" href="#tab-edit" role="tab">
+          <i class="bi bi-person-fill me-1"></i>Edit Profile
+        </a>
+      </li>
+      <li class="nav-item">
+        <a class="nav-link" href="{% url 'accounts:password_change' %}">
+          <i class="bi bi-key-fill me-1"></i>Change Password
+        </a>
+      </li>
+      {% if request.user.is_admin %}
+      <li class="nav-item">
+        <a class="nav-link" href="{% url 'accounts:user_list' %}">
+          <i class="bi bi-people-fill me-1"></i>User Management
+        </a>
+      </li>
+      {% endif %}
+    </ul>
+
+    <div class="tab-content">
+      <div class="tab-pane fade show active" id="tab-edit">
+        <div class="card" style="background:var(--surface);border:1px solid var(--border)">
+          <div class="card-header" style="background:transparent;border-bottom:1px solid var(--border)">
+            <span class="fw-medium">Profile Details</span>
+          </div>
+          <div class="card-body" style="max-width:520px">
+            {% if messages %}
+            {% for msg in messages %}
+            <div class="alert alert-{{ msg.tags|default:'info' }} alert-dismissible fade show py-2" role="alert"
+                 style="font-size:.85rem">
+              {{ msg }}
+              <button type="button" class="btn-close btn-close-white" data-bs-dismiss="alert"></button>
+            </div>
+            {% endfor %}
+            {% endif %}
+
+            <form method="post">
+              {% csrf_token %}
+              <div class="mb-3">
+                <label class="form-label text-secondary" style="font-size:.82rem">First Name</label>
+                {{ form.first_name }}
+                {% if form.first_name.errors %}
+                <div class="invalid-feedback d-block" style="font-size:.78rem">{{ form.first_name.errors.0 }}</div>
+                {% endif %}
+              </div>
+              <div class="mb-3">
+                <label class="form-label text-secondary" style="font-size:.82rem">Last Name</label>
+                {{ form.last_name }}
+                {% if form.last_name.errors %}
+                <div class="invalid-feedback d-block" style="font-size:.78rem">{{ form.last_name.errors.0 }}</div>
+                {% endif %}
+              </div>
+              <div class="mb-4">
+                <label class="form-label text-secondary" style="font-size:.82rem">Email Address</label>
+                {{ form.email }}
+                {% if form.email.errors %}
+                <div class="invalid-feedback d-block" style="font-size:.78rem">{{ form.email.errors.0 }}</div>
+                {% endif %}
+              </div>
+              <button type="submit" class="btn btn-primary btn-sm px-4">
+                <i class="bi bi-check-lg me-1"></i>Save Changes
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <!-- API Token info -->
+        <div class="card mt-3" style="background:var(--surface);border:1px solid var(--border)">
+          <div class="card-header" style="background:transparent;border-bottom:1px solid var(--border)">
+            <span class="fw-medium"><i class="bi bi-key me-2" style="color:var(--amber)"></i>API Access</span>
+          </div>
+          <div class="card-body" style="font-size:.85rem">
+            <p class="text-secondary mb-2">
+              Obtain a JWT token by POSTing your credentials to the token endpoint.
+              The token contains your <code>role</code>, <code>is_admin</code>, and <code>is_engineer</code> claims.
+            </p>
+            <div style="background:#0d1117;border:1px solid var(--border);border-radius:.4rem;padding:.75rem;font-family:'JetBrains Mono',monospace;font-size:.78rem;color:#e2e8f0">
+              <span style="color:#f87171">POST</span> <span style="color:#60a5fa">/api/token/</span><br>
+              <span style="color:#94a3b8">{ "username": "{{ user.username }}", "password": "..." }</span>
+            </div>
+            <a href="/api/docs/" target="_blank" class="btn btn-sm btn-outline-secondary mt-2" style="font-size:.78rem">
+              <i class="bi bi-box-arrow-up-right me-1"></i>Open API Docs
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}

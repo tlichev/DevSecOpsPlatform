@@ -1,0 +1,172 @@
+{% extends 'base.html' %}
+{% block title %}Compliance — NetOps Platform{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'security:home' %}">Security</a></li>
+<li class="breadcrumb-item active">Compliance</li>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+  .score-bar { height: 5px; border-radius: 3px; background: var(--border); overflow: hidden; }
+  .score-bar-fill { height: 100%; border-radius: 3px; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h1 class="h3 mb-1 fw-semibold">
+      <i class="bi bi-shield-check me-2" style="color:var(--blue)"></i>Compliance Report
+    </h1>
+    <p class="text-secondary mb-0">Latest compliance check results per device.</p>
+  </div>
+  {% if request.user.is_engineer or request.user.is_superuser %}
+  <button class="btn btn-primary btn-sm" id="btn-run-all">
+    <i class="bi bi-play-fill me-1"></i>Run All Checks
+  </button>
+  {% endif %}
+</div>
+
+<div class="row g-4">
+
+  <!-- Device table -->
+  <div class="col-xl-8">
+    <div class="card" style="background:var(--surface);border:1px solid var(--border)">
+      <div class="card-header" style="background:transparent;border-bottom:1px solid var(--border)">
+        <span class="fw-medium">Device Compliance Scores</span>
+        <span class="text-secondary ms-2" style="font-size:.8rem">{{ rows|length }} device(s) checked</span>
+      </div>
+      <div class="card-body p-0">
+        {% if rows %}
+        <div class="table-responsive">
+          <table class="table mb-0" style="color:var(--fg)">
+            <thead>
+              <tr style="border-bottom:1px solid var(--border)">
+                <th class="px-4 py-3 text-secondary" style="font-size:.75rem">Device</th>
+                <th class="px-3 py-3 text-secondary" style="font-size:.75rem">Site</th>
+                <th class="px-3 py-3 text-secondary" style="font-size:.75rem">Type</th>
+                <th class="px-3 py-3 text-secondary" style="font-size:.75rem">Score</th>
+                <th class="px-3 py-3 text-secondary" style="font-size:.75rem">Pass / Fail</th>
+                <th class="px-3 py-3 text-secondary" style="font-size:.75rem">Last Checked</th>
+                <th class="px-3 py-3"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {% for row in rows %}
+              <tr style="border-bottom:1px solid var(--border)" class="align-middle">
+                <td class="px-4 py-2 fw-medium" style="font-size:.9rem">{{ row.device.hostname }}</td>
+                <td class="px-3 py-2">
+                  <span class="badge bg-secondary" style="font-size:.7rem">{{ row.device.site|capfirst }}</span>
+                </td>
+                <td class="px-3 py-2 text-secondary" style="font-size:.78rem">
+                  {{ row.device.get_device_type_display }}
+                </td>
+                <td class="px-3 py-2" style="min-width:120px">
+                  <div class="d-flex align-items-center gap-2">
+                    <span style="font-weight:700;font-size:.95rem;width:38px;color:{% if row.score >= 90 %}var(--green){% elif row.score >= 70 %}var(--amber){% else %}var(--red){% endif %}">
+                      {{ row.score }}%
+                    </span>
+                    <div class="score-bar flex-fill">
+                      <div class="score-bar-fill"
+                           style="width:{{ row.score }}%;background:{% if row.score >= 90 %}var(--green){% elif row.score >= 70 %}var(--amber){% else %}var(--red){% endif %}">
+                      </div>
+                    </div>
+                  </div>
+                </td>
+                <td class="px-3 py-2" style="font-size:.82rem">
+                  <span class="text-success">{{ row.pass }} pass</span>
+                  <span class="text-secondary mx-1">/</span>
+                  <span class="text-danger">{{ row.fail }} fail</span>
+                </td>
+                <td class="px-3 py-2 text-secondary" style="font-size:.78rem">
+                  {% if row.last_checked %}{{ row.last_checked|timesince }} ago{% else %}—{% endif %}
+                </td>
+                <td class="px-3 py-2 d-flex gap-1">
+                  <a href="{% url 'security:compliance_device' row.device.pk %}"
+                     class="btn btn-sm btn-outline-secondary" style="font-size:.7rem;padding:.2rem .55rem">
+                    Detail
+                  </a>
+                  {% if request.user.is_engineer or request.user.is_superuser %}
+                  <button class="btn btn-sm btn-outline-primary run-device-btn"
+                          data-id="{{ row.device.pk }}"
+                          style="font-size:.7rem;padding:.2rem .55rem" title="Re-run checks">
+                    ↺
+                  </button>
+                  {% endif %}
+                </td>
+              </tr>
+              {% endfor %}
+            </tbody>
+          </table>
+        </div>
+        {% else %}
+        <div class="text-center py-5 text-secondary">
+          <i class="bi bi-shield-slash d-block mb-2" style="font-size:2.5rem"></i>
+          No compliance checks have been run yet.
+        </div>
+        {% endif %}
+      </div>
+    </div>
+  </div>
+
+  <!-- Active rules sidebar -->
+  <div class="col-xl-4">
+    <div class="card" style="background:var(--surface);border:1px solid var(--border)">
+      <div class="card-header" style="background:transparent;border-bottom:1px solid var(--border)">
+        <span class="fw-medium">Active Rules</span>
+        <span class="text-secondary ms-2" style="font-size:.8rem">{{ rules|length }} rules</span>
+      </div>
+      <div class="card-body p-0" style="max-height:520px;overflow-y:auto">
+        {% regroup rules by category as cat_list %}
+        {% for cat in cat_list %}
+        <div class="px-3 pt-2 pb-1">
+          <span class="text-secondary" style="font-size:.7rem;text-transform:uppercase;letter-spacing:.06em">
+            {{ cat.grouper }}
+          </span>
+        </div>
+        {% for rule in cat.list %}
+        <div class="d-flex justify-content-between align-items-center px-3 py-2"
+             style="border-top:1px solid var(--border)">
+          <span style="font-size:.83rem">{{ rule.name }}</span>
+          <span class="badge"
+                style="font-size:.65rem;background:{% if rule.severity == 'critical' %}rgba(239,68,68,.2);color:#f87171{% elif rule.severity == 'warning' %}rgba(245,158,11,.2);color:#fbbf24{% else %}rgba(59,130,246,.2);color:#60a5fa{% endif %}">
+            {{ rule.severity }}
+          </span>
+        </div>
+        {% endfor %}
+        {% endfor %}
+      </div>
+    </div>
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const CSRF = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+
+document.getElementById('btn-run-all')?.addEventListener('click', async () => {
+  const btn = document.getElementById('btn-run-all');
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner-border spinner-border-sm me-1"></span>Running…';
+  const resp = await fetch('/api/security/compliance/run-all/', {
+    method: 'POST', headers: { 'X-CSRFToken': CSRF, 'Content-Type': 'application/json' }, body: '{}'
+  });
+  if (resp.ok) { btn.innerHTML = '✓ Dispatched'; setTimeout(() => location.reload(), 4000); }
+  else { btn.innerHTML = '⚠ Error'; btn.disabled = false; }
+});
+
+document.querySelectorAll('.run-device-btn').forEach(btn => {
+  btn.addEventListener('click', async () => {
+    const id = btn.dataset.id;
+    btn.disabled = true; btn.textContent = '…';
+    const resp = await fetch(`/api/security/compliance/run/${id}/`, {
+      method: 'POST', headers: { 'X-CSRFToken': CSRF, 'Content-Type': 'application/json' }, body: '{}'
+    });
+    btn.textContent = resp.ok ? '✓' : '✗';
+    setTimeout(() => { btn.textContent = '↺'; btn.disabled = false; }, 3000);
+  });
+});
+</script>
+{% endblock %}

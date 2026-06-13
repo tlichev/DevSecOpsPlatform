@@ -1,0 +1,423 @@
+{% extends 'base.html' %}
+{% block title %}Push Config — NetOps Platform{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'provisioning:home' %}">Provisioning</a></li>
+<li class="breadcrumb-item active">Push Config</li>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+  #preview-output {
+    background: #0d1117;
+    border: 1px solid var(--border);
+    border-radius: .5rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .8rem;
+    color: #e2e8f0;
+    min-height: 340px;
+    max-height: 520px;
+    overflow-y: auto;
+    padding: 1rem;
+    white-space: pre;
+    line-height: 1.55;
+  }
+  #push-log {
+    background: #0d1117;
+    border: 1px solid var(--border);
+    border-radius: .5rem;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: .78rem;
+    color: #94a3b8;
+    min-height: 100px;
+    max-height: 260px;
+    overflow-y: auto;
+    padding: .75rem;
+    white-space: pre-wrap;
+  }
+  .device-checkbox-item {
+    display: flex;
+    align-items: center;
+    gap: .5rem;
+    padding: .35rem .75rem;
+    border-radius: .35rem;
+    cursor: pointer;
+    transition: background .15s;
+  }
+  .device-checkbox-item:hover { background: rgba(59,130,246,.08); }
+  .device-checkbox-item input[type=checkbox] { cursor: pointer; }
+  .site-pill {
+    display: inline-block;
+    padding: .1rem .5rem;
+    border-radius: 999px;
+    font-size: .65rem;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: .04em;
+  }
+  .site-pill-sofia    { background: rgba(59,130,246,.2);  color: #60a5fa; }
+  .site-pill-burgas   { background: rgba(168,85,247,.2);  color: #c084fc; }
+  .site-pill-plovdiv  { background: rgba(34,197,94,.2);   color: #4ade80; }
+  .site-pill-wan      { background: rgba(245,158,11,.2);  color: #fbbf24; }
+  .push-status-badge  { font-size:.8rem; font-weight:600; }
+</style>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h1 class="h3 mb-1 fw-semibold">
+      <i class="bi bi-send me-2" style="color:var(--blue)"></i>Push Configuration
+    </h1>
+    <p class="text-secondary mb-0">Select a template and target devices, preview, then push.</p>
+  </div>
+  <a href="{% url 'provisioning:home' %}" class="btn btn-outline-secondary btn-sm">
+    <i class="bi bi-arrow-left me-1"></i>Back
+  </a>
+</div>
+
+<div class="row g-4">
+
+  <!-- ── Left panel: controls ── -->
+  <div class="col-lg-5">
+
+    <!-- Template selector -->
+    <div class="card mb-3" style="background:var(--surface);border:1px solid var(--border)">
+      <div class="card-header" style="background:transparent;border-bottom:1px solid var(--border)">
+        <i class="bi bi-file-earmark-code me-2" style="color:var(--blue)"></i>
+        <span class="fw-medium">Template</span>
+      </div>
+      <div class="card-body">
+        <select id="template-select" class="form-select form-select-sm" style="background:var(--bg);color:var(--fg);border-color:var(--border)">
+          <option value="">— Select a template —</option>
+          <optgroup label="File Templates">
+            {% for t in all_templates %}{% if t.source == 'file' %}
+            <option value="{{ t.name }}"
+              {% if request.GET.template == t.name %}selected{% endif %}>
+              {{ t.name }}{% if t.device_type %} [{{ t.device_type }}]{% endif %}
+            </option>
+            {% endif %}{% endfor %}
+          </optgroup>
+          <optgroup label="Database Templates">
+            {% for t in all_templates %}{% if t.source == 'db' %}
+            <option value="{{ t.name }}"
+              {% if request.GET.template == t.name %}selected{% endif %}>
+              {{ t.name }}{% if t.device_type %} [{{ t.device_type }}]{% endif %}
+            </option>
+            {% endif %}{% endfor %}
+          </optgroup>
+        </select>
+
+        <div class="mt-3">
+          <label class="form-label text-secondary" style="font-size:.75rem">
+            Extra Context (JSON)
+            <i class="bi bi-question-circle ms-1" title='e.g. {"ospf_process_id": "2"}'></i>
+          </label>
+          <textarea id="extra-context" rows="3" class="form-control form-control-sm"
+                    placeholder='{}' style="font-family:monospace;font-size:.8rem;background:var(--bg);color:var(--fg);border-color:var(--border)">{}</textarea>
+          <div id="ctx-error" class="text-danger mt-1" style="font-size:.75rem;display:none">Invalid JSON.</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Device selector -->
+    <div class="card mb-3" style="background:var(--surface);border:1px solid var(--border)">
+      <div class="card-header d-flex justify-content-between align-items-center"
+           style="background:transparent;border-bottom:1px solid var(--border)">
+        <span>
+          <i class="bi bi-hdd-rack me-2" style="color:var(--green)"></i>
+          <span class="fw-medium">Target Devices</span>
+        </span>
+        <div class="d-flex gap-1 align-items-center">
+          <!-- Site filter pills -->
+          <button class="btn btn-sm site-filter-btn active" data-site=""
+                  style="font-size:.7rem;padding:.15rem .5rem">All</button>
+          {% for site in sites %}
+          <button class="btn btn-sm site-filter-btn" data-site="{{ site }}"
+                  style="font-size:.7rem;padding:.15rem .5rem">{{ site|capfirst }}</button>
+          {% endfor %}
+        </div>
+      </div>
+      <div class="card-body p-2" style="max-height:260px;overflow-y:auto">
+        <div class="d-flex gap-2 mb-2 px-1">
+          <button class="btn btn-sm btn-outline-secondary" id="select-all"
+                  style="font-size:.7rem;padding:.15rem .55rem">Select All</button>
+          <button class="btn btn-sm btn-outline-secondary" id="deselect-all"
+                  style="font-size:.7rem;padding:.15rem .55rem">Deselect All</button>
+          <span class="ms-auto text-secondary" id="selected-count" style="font-size:.75rem;align-self:center">0 selected</span>
+        </div>
+        <div id="device-list">
+          {% for dev in devices %}
+          <label class="device-checkbox-item" data-site="{{ dev.site }}">
+            <input type="checkbox" class="device-check form-check-input"
+                   value="{{ dev.pk }}" data-hostname="{{ dev.hostname }}"
+                   style="margin:0">
+            <span style="font-size:.85rem">{{ dev.hostname }}</span>
+            <span class="site-pill site-pill-{{ dev.site|lower }} ms-1">{{ dev.site }}</span>
+            <span class="text-secondary ms-auto" style="font-size:.7rem">{{ dev.management_ip }}</span>
+          </label>
+          {% empty %}
+          <p class="text-secondary text-center py-3 mb-0" style="font-size:.85rem">
+            No devices with status=up found.
+          </p>
+          {% endfor %}
+        </div>
+      </div>
+    </div>
+
+    <!-- Options + actions -->
+    <div class="card" style="background:var(--surface);border:1px solid var(--border)">
+      <div class="card-body">
+        <div class="form-check form-switch mb-3">
+          <input class="form-check-input" type="checkbox" id="dry-run-toggle">
+          <label class="form-check-label text-secondary" for="dry-run-toggle" style="font-size:.85rem">
+            Dry Run (render only, no SSH push)
+          </label>
+        </div>
+        <div class="d-flex gap-2">
+          <button id="btn-preview" class="btn btn-outline-secondary btn-sm flex-fill">
+            <i class="bi bi-eye me-1"></i>Preview
+          </button>
+          <button id="btn-push" class="btn btn-primary btn-sm flex-fill" disabled>
+            <i class="bi bi-send me-1"></i>Push
+          </button>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- ── Right panel: preview + status ── -->
+  <div class="col-lg-7">
+
+    <div class="card mb-3" style="background:var(--surface);border:1px solid var(--border)">
+      <div class="card-header d-flex justify-content-between align-items-center"
+           style="background:transparent;border-bottom:1px solid var(--border)">
+        <span>
+          <i class="bi bi-code-slash me-2" style="color:var(--purple)"></i>
+          <span class="fw-medium">Config Preview</span>
+          <span id="preview-device-label" class="text-secondary ms-2" style="font-size:.8rem"></span>
+        </span>
+        <button id="btn-copy-preview" class="btn btn-sm btn-outline-secondary"
+                style="font-size:.7rem;padding:.15rem .55rem" title="Copy to clipboard" disabled>
+          <i class="bi bi-clipboard"></i>
+        </button>
+      </div>
+      <div class="card-body p-0">
+        <pre id="preview-output" class="mb-0 rounded-0">Select a template and at least one device, then click Preview.</pre>
+      </div>
+    </div>
+
+    <div class="card" style="background:var(--surface);border:1px solid var(--border)">
+      <div class="card-header d-flex justify-content-between align-items-center"
+           style="background:transparent;border-bottom:1px solid var(--border)">
+        <span>
+          <i class="bi bi-terminal me-2" style="color:var(--amber)"></i>
+          <span class="fw-medium">Push Log</span>
+        </span>
+        <span id="push-status-badge" class="push-status-badge"></span>
+      </div>
+      <div class="card-body p-0">
+        <pre id="push-log" class="mb-0 rounded-0">Awaiting push…</pre>
+      </div>
+    </div>
+
+  </div>
+
+</div>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+(function () {
+  const CSRF = document.cookie.match(/csrftoken=([^;]+)/)?.[1] || '';
+
+  /* ── Element refs ── */
+  const templateSelect  = document.getElementById('template-select');
+  const extraCtxTA      = document.getElementById('extra-context');
+  const ctxError        = document.getElementById('ctx-error');
+  const deviceList      = document.getElementById('device-list');
+  const selectedCount   = document.getElementById('selected-count');
+  const btnPreview      = document.getElementById('btn-preview');
+  const btnPush         = document.getElementById('btn-push');
+  const btnCopy         = document.getElementById('btn-copy-preview');
+  const previewOut      = document.getElementById('preview-output');
+  const previewLabel    = document.getElementById('preview-device-label');
+  const pushLog         = document.getElementById('push-log');
+  const pushBadge       = document.getElementById('push-status-badge');
+  const dryRunToggle    = document.getElementById('dry-run-toggle');
+
+  /* ── Helpers ── */
+  function getChecked() {
+    return [...document.querySelectorAll('.device-check:checked')];
+  }
+  function getExtraCtx() {
+    try {
+      const v = extraCtxTA.value.trim() || '{}';
+      const parsed = JSON.parse(v);
+      ctxError.style.display = 'none';
+      return parsed;
+    } catch {
+      ctxError.style.display = '';
+      return null;
+    }
+  }
+  function updateCount() {
+    const n = getChecked().length;
+    selectedCount.textContent = n + ' selected';
+    btnPush.disabled = !(n > 0 && templateSelect.value);
+  }
+
+  /* ── Site filter ── */
+  document.querySelectorAll('.site-filter-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      document.querySelectorAll('.site-filter-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      const site = btn.dataset.site;
+      document.querySelectorAll('#device-list .device-checkbox-item').forEach(item => {
+        item.style.display = (!site || item.dataset.site === site) ? '' : 'none';
+      });
+    });
+  });
+
+  /* ── Select / Deselect all ── */
+  document.getElementById('select-all').addEventListener('click', () => {
+    document.querySelectorAll('#device-list .device-checkbox-item:not([style*="none"]) .device-check')
+      .forEach(cb => cb.checked = true);
+    updateCount();
+  });
+  document.getElementById('deselect-all').addEventListener('click', () => {
+    document.querySelectorAll('.device-check').forEach(cb => cb.checked = false);
+    updateCount();
+  });
+
+  /* ── Track checkbox changes ── */
+  deviceList.addEventListener('change', updateCount);
+  templateSelect.addEventListener('change', updateCount);
+
+  /* ── Preview ── */
+  btnPreview.addEventListener('click', async () => {
+    const checked = getChecked();
+    const tmpl    = templateSelect.value;
+    if (!tmpl || checked.length === 0) {
+      previewOut.textContent = 'Select a template and at least one device first.';
+      return;
+    }
+    const ctx = getExtraCtx();
+    if (ctx === null) return;
+
+    const deviceId = checked[0].value;
+    const hostname = checked[0].dataset.hostname;
+    previewLabel.textContent = '— ' + hostname + (checked.length > 1 ? ' (+' + (checked.length-1) + ' more)' : '');
+    previewOut.textContent = 'Rendering…';
+    btnCopy.disabled = true;
+
+    try {
+      const resp = await fetch('/api/provisioning/render/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        body: JSON.stringify({ device_id: parseInt(deviceId), template_name: tmpl, extra_context: ctx }),
+      });
+      const data = await resp.json();
+      if (resp.ok) {
+        previewOut.textContent = data.rendered || '(empty output)';
+        btnCopy.disabled = false;
+      } else {
+        previewOut.textContent = '⚠ Error: ' + (data.error || JSON.stringify(data));
+      }
+    } catch (err) {
+      previewOut.textContent = '⚠ Network error: ' + err;
+    }
+  });
+
+  /* ── Copy preview ── */
+  btnCopy.addEventListener('click', () => {
+    navigator.clipboard.writeText(previewOut.textContent).then(() => {
+      btnCopy.innerHTML = '<i class="bi bi-check2"></i>';
+      setTimeout(() => btnCopy.innerHTML = '<i class="bi bi-clipboard"></i>', 1500);
+    });
+  });
+
+  /* ── Push ── */
+  btnPush.addEventListener('click', async () => {
+    const checked = getChecked();
+    const tmpl    = templateSelect.value;
+    const ctx     = getExtraCtx();
+    if (!tmpl || checked.length === 0 || ctx === null) return;
+
+    const deviceIds = checked.map(cb => parseInt(cb.value));
+    const isDry     = dryRunToggle.checked;
+
+    pushBadge.textContent = '';
+    pushLog.textContent   = 'Dispatching ' + deviceIds.length + ' task(s)…\n';
+    btnPush.disabled = true;
+
+    try {
+      const resp = await fetch('/api/provisioning/push/', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-CSRFToken': CSRF },
+        body: JSON.stringify({
+          device_ids: deviceIds,
+          template_name: tmpl,
+          extra_context: ctx,
+          dry_run: isDry,
+        }),
+      });
+      const data = await resp.json();
+
+      if (!resp.ok) {
+        pushLog.textContent += '⚠ Error: ' + JSON.stringify(data);
+        btnPush.disabled = false;
+        return;
+      }
+
+      const groupId = data.task_id;
+      pushLog.textContent += 'Group task ID: ' + groupId + '\n';
+      pushLog.textContent += 'Pushing to ' + data.device_count + ' device(s)' + (isDry ? ' [DRY RUN]' : '') + '…\n';
+      pushBadge.textContent = '⌛ Running';
+      pushBadge.style.color = 'var(--amber)';
+
+      // Poll for completion
+      let polls = 0;
+      const poll = async () => {
+        polls++;
+        if (polls > 60) {
+          pushLog.textContent += '\n⌛ Timeout — check Audit Log for results.';
+          btnPush.disabled = false;
+          return;
+        }
+        const r = await fetch('/api/provisioning/task/' + groupId + '/');
+        const d = await r.json();
+        pushLog.textContent = pushLog.textContent.replace(/\nPolling\.\.\./g, '');
+        pushLog.textContent += '\nPolling…';
+
+        if (d.state === 'SUCCESS' || d.state === 'FAILURE') {
+          pushLog.textContent = pushLog.textContent.replace(/\nPolling\.\.\./g, '');
+          pushLog.textContent += '\n\nState: ' + d.state;
+          if (d.result) {
+            pushLog.textContent += '\n' + JSON.stringify(d.result, null, 2);
+          }
+          if (d.state === 'SUCCESS') {
+            pushBadge.textContent = '✓ Success';
+            pushBadge.style.color = 'var(--green)';
+          } else {
+            pushBadge.textContent = '✗ Failed';
+            pushBadge.style.color = 'var(--red)';
+          }
+          btnPush.disabled = false;
+        } else {
+          setTimeout(poll, 2500);
+        }
+      };
+      setTimeout(poll, 2500);
+
+    } catch (err) {
+      pushLog.textContent += '\n⚠ Network error: ' + err;
+      btnPush.disabled = false;
+    }
+  });
+
+  /* ── Pre-select template from query string ── */
+  updateCount();
+})();
+</script>
+{% endblock %}

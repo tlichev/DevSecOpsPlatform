@@ -1,0 +1,49 @@
+! =============================================================================
+! OSPF Area 0 Configuration
+! Generated for : {{ hostname }}  ({{ ip_address }})
+! Site          : {{ site_label }}
+! =============================================================================
+
+{% set process_id = ospf_process_id | default(1) %}
+{% set area = ospf_area | default(0) %}
+
+router ospf {{ process_id }}
+ router-id {{ loopback_ip if loopback_ip else ip_address }}
+ auto-cost reference-bandwidth 10000
+ passive-interface default
+{% if device_type in ['firewall_primary', 'firewall_secondary'] %}
+ no passive-interface GigabitEthernet0/1
+{% elif device_type == 'router' %}
+ no passive-interface Ethernet0/0
+{% endif %}
+ !
+{% if device_type == 'firewall_primary' %}
+ ! Advertise LAN segment (172.16.1.0/29) into OSPF
+ network 172.16.1.0 0.0.0.7 area {{ area }}
+ ! Advertise loopback if present
+ {% if loopback_ip %}
+ network {{ loopback_ip }} 0.0.0.0 area {{ area }}
+ {% endif %}
+{% elif device_type == 'router' %}
+ ! Branch router: advertise loopback
+ {% if loopback_ip %}
+ network {{ loopback_ip }} 0.0.0.0 area {{ area }}
+ {% endif %}
+{% endif %}
+ !
+ ! SPF timers — fast convergence
+ timers spf 1 5 10
+ timers lsa arrival 100
+ !
+ ! Authentication (MD5)
+ area {{ area }} authentication message-digest
+
+{% if loopback_ip %}
+! ── Loopback interface ─────────────────────────────────────────────────────
+interface Loopback0
+ description OSPF Router-ID / Management loopback
+ ip address {{ loopback_ip }} 255.255.255.255
+ ip ospf {{ process_id }} area {{ area }}
+ no shutdown
+{% endif %}
+!

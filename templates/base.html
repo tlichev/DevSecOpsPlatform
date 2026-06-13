@@ -1,0 +1,187 @@
+{% load static %}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>{% block title %}NetOps Platform{% endblock %}</title>
+
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.3/font/bootstrap-icons.min.css" rel="stylesheet">
+    <link href="{% static 'css/main.css' %}" rel="stylesheet">
+    {% block extra_css %}{% endblock %}
+</head>
+<body>
+
+<!-- ─── Sidebar ─────────────────────────────────────────────────────────── -->
+<nav class="sidebar" id="sidebar">
+
+    <div class="sidebar-header">
+        <i class="bi bi-cpu-fill sidebar-logo-icon"></i>
+        <span class="sidebar-logo-text">NetOps <span class="sidebar-logo-accent">Platform</span></span>
+    </div>
+
+    <div class="sidebar-body">
+
+        <div class="nav-group">
+            <a href="{% url 'inventory:dashboard' %}"
+               class="nav-link-item {% if request.resolver_match.url_name == 'dashboard' %}active{% endif %}">
+                <i class="bi bi-speedometer2"></i><span>Dashboard</span>
+            </a>
+            <a href="{% url 'inventory:device_list' %}"
+               class="nav-link-item {% if request.resolver_match.url_name == 'device_list' or request.resolver_match.url_name == 'device_detail' %}active{% endif %}">
+                <i class="bi bi-hdd-rack"></i><span>Inventory</span>
+            </a>
+        </div>
+
+        <div class="nav-section-label">Sites</div>
+        <div class="nav-group">
+            <a href="{% url 'inventory:site_sofia' %}"
+               class="nav-link-item {% if request.resolver_match.url_name == 'site_sofia' %}active{% endif %}">
+                <i class="bi bi-geo-alt"></i><span>Sofia</span>
+                <span class="site-dot dot-sofia" title="Up"></span>
+            </a>
+            <a href="{% url 'inventory:site_burgas' %}"
+               class="nav-link-item {% if request.resolver_match.url_name == 'site_burgas' %}active{% endif %}">
+                <i class="bi bi-geo-alt"></i><span>Burgas</span>
+                <span class="site-dot dot-burgas" title="Up"></span>
+            </a>
+            <a href="{% url 'inventory:site_plovdiv' %}"
+               class="nav-link-item {% if request.resolver_match.url_name == 'site_plovdiv' %}active{% endif %}">
+                <i class="bi bi-geo-alt"></i><span>Plovdiv</span>
+                <span class="site-dot dot-plovdiv" title="Up"></span>
+            </a>
+        </div>
+
+        <div class="nav-section-label">Operations</div>
+        <div class="nav-group">
+            <a href="{% url 'provisioning:home' %}"
+               class="nav-link-item {% if request.resolver_match.namespace == 'provisioning' and request.resolver_match.url_name != 'audit_log' %}active{% endif %}">
+                <i class="bi bi-terminal-fill"></i><span>Provisioning</span>
+            </a>
+            <a href="{% url 'monitoring:home' %}"
+               class="nav-link-item {% if request.resolver_match.namespace == 'monitoring' %}active{% endif %}">
+                <i class="bi bi-activity"></i><span>Monitoring</span>
+                <span class="nav-badge" id="nav-alert-count" style="display:none">0</span>
+            </a>
+            <a href="{% url 'security:home' %}"
+               class="nav-link-item {% if request.resolver_match.namespace == 'security' %}active{% endif %}">
+                <i class="bi bi-shield-check"></i><span>Security</span>
+            </a>
+            <a href="{% url 'provisioning:audit_log' %}"
+               class="nav-link-item {% if request.resolver_match.url_name == 'audit_log' %}active{% endif %}">
+                <i class="bi bi-journal-text"></i><span>Audit Log</span>
+            </a>
+        </div>
+
+        <div class="nav-section-label">System</div>
+        <div class="nav-group">
+            <a href="/admin/" class="nav-link-item">
+                <i class="bi bi-gear-fill"></i><span>Django Admin</span>
+            </a>
+            <a href="/api/docs/" class="nav-link-item" target="_blank" rel="noopener">
+                <i class="bi bi-code-square"></i><span>API Docs</span>
+                <i class="bi bi-box-arrow-up-right ms-auto" style="font-size:.65rem;opacity:.5"></i>
+            </a>
+        </div>
+
+    </div>
+
+    <div class="sidebar-footer">
+        {% if request.user.is_authenticated %}
+        <div class="sidebar-user">
+            <div class="sidebar-avatar">{{ request.user.username|first|upper }}</div>
+            <div class="sidebar-user-info">
+                <span class="sidebar-username">{{ request.user.username }}</span>
+                <span class="sidebar-role badge-role-{{ request.user.role|default:'readonly' }}">
+                    {{ request.user.get_role_display|default:"Read Only" }}
+                </span>
+            </div>
+            <a href="{% url 'accounts:logout' %}" class="sidebar-logout" title="Logout">
+                <i class="bi bi-box-arrow-right"></i>
+            </a>
+        </div>
+        {% endif %}
+    </div>
+
+</nav>
+
+<!-- ─── Main ──────────────────────────────────────────────────────────────── -->
+<div class="main-wrapper" id="main-wrapper">
+
+    <!-- Topbar -->
+    <header class="topbar">
+        <button class="topbar-toggle" id="sidebar-toggle" title="Toggle sidebar">
+            <i class="bi bi-list"></i>
+        </button>
+
+        <nav class="topbar-breadcrumb" aria-label="breadcrumb">
+            <ol class="breadcrumb mb-0">
+                <li class="breadcrumb-item"><a href="/">Home</a></li>
+                {% block breadcrumb %}{% endblock %}
+            </ol>
+        </nav>
+
+        <div class="topbar-right">
+            <div class="platform-status" id="platform-status-indicator">
+                <span class="status-pulse"></span>
+                <span class="status-label">Platform Online</span>
+            </div>
+            <span class="topbar-divider"></span>
+            <span class="topbar-time" id="topbar-clock"></span>
+        </div>
+    </header>
+
+    <!-- Flash messages -->
+    {% if messages %}
+    <div class="flash-container">
+        {% for msg in messages %}
+        <div class="flash flash-{{ msg.tags }}" role="alert">
+            <i class="bi bi-{% if msg.tags == 'error' or msg.tags == 'danger' %}exclamation-triangle-fill{% elif msg.tags == 'success' %}check-circle-fill{% elif msg.tags == 'warning' %}exclamation-circle-fill{% else %}info-circle-fill{% endif %}"></i>
+            <span>{{ msg }}</span>
+            <button class="flash-close" onclick="this.closest('.flash').remove()">
+                <i class="bi bi-x-lg"></i>
+            </button>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    <!-- Page -->
+    <main class="page-content">
+        {% block content %}{% endblock %}
+    </main>
+
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.2/dist/js/bootstrap.bundle.min.js"></script>
+<script src="{% static 'js/topology.js' %}"></script>
+<script>
+    // Sidebar toggle
+    const sidebar  = document.getElementById('sidebar');
+    const wrapper  = document.getElementById('main-wrapper');
+    const toggle   = document.getElementById('sidebar-toggle');
+    if (toggle) {
+        toggle.addEventListener('click', () => {
+            sidebar.classList.toggle('sidebar-collapsed');
+            wrapper.classList.toggle('sidebar-collapsed');
+        });
+    }
+
+    // Live clock
+    function updateClock() {
+        const el = document.getElementById('topbar-clock');
+        if (el) el.textContent = new Date().toLocaleTimeString('en-GB');
+    }
+    updateClock();
+    setInterval(updateClock, 1000);
+
+    // Auto-dismiss flashes
+    setTimeout(() => document.querySelectorAll('.flash').forEach(el => el.remove()), 6000);
+</script>
+{% block extra_js %}{% endblock %}
+</body>
+</html>

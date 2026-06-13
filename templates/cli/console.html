@@ -1,0 +1,550 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}CLI — {{ device.hostname }} — NetOps Platform{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'inventory:device_list' %}">Inventory</a></li>
+<li class="breadcrumb-item"><a href="{% url 'inventory:device_detail' device.pk %}">{{ device.hostname }}</a></li>
+<li class="breadcrumb-item active">CLI</li>
+{% endblock %}
+
+{% block extra_css %}
+<style>
+/* ── Terminal chrome ──────────────────────────────────────────────────── */
+.terminal-wrap {
+    background: #0d1117;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    overflow: hidden;
+    display: flex;
+    flex-direction: column;
+    height: calc(100vh - 260px);
+    min-height: 420px;
+}
+.terminal-bar {
+    background: #161b22;
+    border-bottom: 1px solid var(--border);
+    padding: 8px 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+.term-dot { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+
+/* ── Output area ─────────────────────────────────────────────────────── */
+.terminal-output {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px 18px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    line-height: 1.6;
+    color: #e2e8f0;
+    scroll-behavior: smooth;
+}
+.terminal-output::-webkit-scrollbar { width: 6px; }
+.terminal-output::-webkit-scrollbar-track { background: #0d1117; }
+.terminal-output::-webkit-scrollbar-thumb { background: #30363d; border-radius: 3px; }
+
+/* ── Output elements ─────────────────────────────────────────────────── */
+.term-banner {
+    color: #3b82f6;
+    margin-bottom: 12px;
+    padding-bottom: 8px;
+    border-bottom: 1px solid #21262d;
+    font-size: 0.75rem;
+}
+.term-entry { margin-bottom: 14px; }
+.term-prompt {
+    color: #22c55e;
+    font-weight: 700;
+    margin-bottom: 2px;
+    display: flex;
+    align-items: baseline;
+    gap: 6px;
+}
+.term-prompt .cmd  { color: #e2e8f0; }
+.term-prompt .dur  { color: #475569; font-size: 0.7rem; margin-left: auto; }
+.term-output-text  { color: #94a3b8; white-space: pre-wrap; word-break: break-word; padding-left: 2px; }
+.term-output-error { color: #ef4444; white-space: pre-wrap; word-break: break-word; padding-left: 2px; }
+.term-spinner {
+    color: #3b82f6;
+    font-size: 0.75rem;
+    padding-left: 2px;
+    animation: blink 1s step-start infinite;
+}
+@keyframes blink { 50% { opacity: 0; } }
+
+/* ── Input row ───────────────────────────────────────────────────────── */
+.terminal-input-row {
+    border-top: 1px solid #21262d;
+    background: #0d1117;
+    padding: 10px 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    flex-shrink: 0;
+}
+.term-input-prompt {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    color: #22c55e;
+    font-weight: 700;
+    white-space: nowrap;
+    flex-shrink: 0;
+}
+#term-input {
+    flex: 1;
+    background: transparent;
+    border: none;
+    outline: none;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.8rem;
+    color: #e2e8f0;
+    caret-color: #22c55e;
+}
+#term-input::placeholder { color: #334155; }
+.btn-run {
+    background: #22c55e22;
+    color: #22c55e;
+    border: 1px solid #22c55e44;
+    border-radius: 6px;
+    padding: 5px 14px;
+    font-size: 12px;
+    font-weight: 600;
+    cursor: pointer;
+    flex-shrink: 0;
+    transition: background .15s;
+}
+.btn-run:hover { background: #22c55e33; }
+.btn-run:disabled { opacity: .4; cursor: not-allowed; }
+
+/* ── Session bar ─────────────────────────────────────────────────────── */
+.session-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    background: #161b22;
+    border-bottom: 1px solid var(--border);
+    flex-shrink: 0;
+    flex-wrap: wrap;
+}
+.session-select {
+    background: #0d1117;
+    color: #e2e8f0;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 4px 8px;
+    font-size: 12px;
+    font-family: inherit;
+    cursor: pointer;
+    max-width: 240px;
+}
+.session-select:focus { outline: none; border-color: #3b82f6; }
+.btn-term-action {
+    background: transparent;
+    color: #94a3b8;
+    border: 1px solid #30363d;
+    border-radius: 6px;
+    padding: 4px 10px;
+    font-size: 11px;
+    cursor: pointer;
+    transition: all .15s;
+}
+.btn-term-action:hover { color: #e2e8f0; border-color: #6b7280; }
+.btn-term-action.danger:hover { color: #ef4444; border-color: #ef444466; }
+</style>
+{% endblock %}
+
+{% block content %}
+
+<!-- ─── Page header ──────────────────────────────────────────────────────────── -->
+<div class="page-header d-flex align-items-start justify-content-between flex-wrap gap-3 mb-3">
+    <div class="d-flex align-items-center gap-3">
+        <div style="width:44px;height:44px;border-radius:10px;
+                    background:{{ device.site_color }}22;
+                    display:flex;align-items:center;justify-content:center;
+                    font-size:20px;color:{{ device.site_color }}">
+            <i class="bi {{ device.device_type_icon }}"></i>
+        </div>
+        <div>
+            <h1 style="margin:0;font-size:1.3rem">
+                CLI Console &mdash; {{ device.hostname }}
+            </h1>
+            <p style="margin:0;font-size:12px">
+                <span class="mono" style="color:#93c5fd">{{ device.ip_address }}</span>
+                &nbsp;&middot;&nbsp;
+                <span style="color:{{ device.site_color }}">{{ device.get_site_display }}</span>
+                &nbsp;&middot;&nbsp;
+                <span class="badge-status badge-{{ device.status }}">{{ device.status }}</span>
+            </p>
+        </div>
+    </div>
+    <a href="{% url 'inventory:device_detail' device.pk %}" class="btn-ghost">
+        <i class="bi bi-arrow-left"></i> Back to Device
+    </a>
+</div>
+
+<!-- ─── Terminal ──────────────────────────────────────────────────────────────── -->
+<div class="terminal-wrap">
+
+    <!-- title bar -->
+    <div class="terminal-bar">
+        <span class="term-dot" style="background:#ef4444"></span>
+        <span class="term-dot" style="background:#f59e0b"></span>
+        <span class="term-dot" style="background:#22c55e"></span>
+        <span style="font-size:11px;color:#6b7280;margin-left:4px;font-family:'JetBrains Mono',monospace">
+            ssh {{ device.ssh_username|default:"admin" }}@{{ device.ip_address }}
+        </span>
+        <span style="margin-left:auto;display:flex;gap:6px">
+            <button class="btn-term-action" id="btn-clear" title="Clear screen">
+                <i class="bi bi-x-square"></i> Clear
+            </button>
+            <button class="btn-term-action" id="btn-export" title="Download session as text">
+                <i class="bi bi-download"></i> Export
+            </button>
+        </span>
+    </div>
+
+    <!-- session selector -->
+    <div class="session-bar">
+        <i class="bi bi-journals" style="color:#475569;font-size:13px"></i>
+        <select class="session-select" id="session-select" title="Switch session">
+            {% for s in sessions %}
+            <option value="{{ s.pk }}" {% if s.pk == session.pk %}selected{% endif %}>
+                {% if s.name %}{{ s.name }}{% else %}Session #{{ s.pk }}{% endif %}
+                ({{ s.command_count }} cmd{% if s.command_count != 1 %}s{% endif %})
+            </option>
+            {% endfor %}
+        </select>
+        <button class="btn-term-action" id="btn-new-session">
+            <i class="bi bi-plus-lg"></i> New
+        </button>
+        <button class="btn-term-action" id="btn-rename-session">
+            <i class="bi bi-pencil"></i> Rename
+        </button>
+        <button class="btn-term-action danger" id="btn-delete-session" {% if sessions|length <= 1 %}style="display:none"{% endif %}>
+            <i class="bi bi-trash3"></i> Delete
+        </button>
+        <span style="margin-left:auto;font-size:11px;color:#475569">
+            Session #{{ session.pk }} &middot; opened {{ session.created_at|date:"d M H:i" }}
+        </span>
+    </div>
+
+    <!-- output -->
+    <div class="terminal-output" id="terminal-output">
+        <div class="term-banner">
+            ── Connected to {{ device.hostname }} ({{ device.ip_address }}) ──&nbsp;
+            {{ session.created_at|date:"d M Y H:i" }} &nbsp;·&nbsp; session #{{ session.pk }}
+        </div>
+        <!-- History injected here by JS on load -->
+    </div>
+
+    <!-- input -->
+    <div class="terminal-input-row">
+        <span class="term-input-prompt" id="prompt-label">{{ device.hostname }}#</span>
+        <input type="text" id="term-input" placeholder="type a command…" autocomplete="off" autocorrect="off" spellcheck="false">
+        <button class="btn-run" id="btn-run">
+            <i class="bi bi-play-fill"></i> Run
+        </button>
+    </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const DEVICE_ID  = {{ device.pk }};
+const SESSION_ID = {{ session.pk }};
+const HOSTNAME   = '{{ device.hostname }}';
+
+const output   = document.getElementById('terminal-output');
+const input    = document.getElementById('term-input');
+const btnRun   = document.getElementById('btn-run');
+
+// ── In-session command history (up/down arrows) ───────────────────────────────
+let cmdHistory  = [];
+let historyIdx  = -1;
+
+// ── Load existing history from DB ─────────────────────────────────────────────
+async function loadHistory() {
+    try {
+        const r = await fetch(`/api/cli/sessions/${SESSION_ID}/history/`, {
+            credentials: 'same-origin',
+        });
+        const cmds = await r.json();
+        cmds.forEach(c => {
+            appendEntry(c.command, c.output, c.is_error, c.duration_ms, false);
+            cmdHistory.push(c.command);
+        });
+        scrollBottom();
+    } catch (e) {
+        appendBanner('Could not load session history.', 'error');
+    }
+}
+
+// ── Render helpers ────────────────────────────────────────────────────────────
+function appendEntry(cmd, out, isError, durMs, scroll = true) {
+    const entry = document.createElement('div');
+    entry.className = 'term-entry';
+    const dur = durMs ? `${(durMs / 1000).toFixed(1)}s` : '';
+    entry.innerHTML = `
+        <div class="term-prompt">
+            <span>${escHtml(HOSTNAME)}#</span>
+            <span class="cmd">${escHtml(cmd)}</span>
+            ${dur ? `<span class="dur">${dur}</span>` : ''}
+        </div>
+        <div class="${isError ? 'term-output-error' : 'term-output-text'}">${escHtml(out)}</div>
+    `;
+    output.appendChild(entry);
+    if (scroll) scrollBottom();
+}
+
+function appendBanner(msg, type = 'info') {
+    const div = document.createElement('div');
+    div.className = 'term-banner';
+    div.style.color = type === 'error' ? '#ef4444' : '#3b82f6';
+    div.textContent = `── ${msg} ──`;
+    output.appendChild(div);
+    scrollBottom();
+}
+
+function appendSpinner(cmd) {
+    const entry = document.createElement('div');
+    entry.className = 'term-entry';
+    entry.id = 'pending-entry';
+    entry.innerHTML = `
+        <div class="term-prompt">
+            <span>${escHtml(HOSTNAME)}#</span>
+            <span class="cmd">${escHtml(cmd)}</span>
+        </div>
+        <div class="term-spinner">▌ executing…</div>
+    `;
+    output.appendChild(entry);
+    scrollBottom();
+    return entry;
+}
+
+function scrollBottom() {
+    output.scrollTop = output.scrollHeight;
+}
+
+function escHtml(str) {
+    return String(str)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;');
+}
+
+// ── Execute command ───────────────────────────────────────────────────────────
+async function runCommand(cmd) {
+    if (!cmd.trim()) return;
+    setRunning(true);
+    cmdHistory.unshift(cmd);
+    historyIdx = -1;
+
+    const spinner = appendSpinner(cmd);
+
+    try {
+        // Dispatch task
+        const r = await fetch('/api/cli/execute/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken'),
+            },
+            credentials: 'same-origin',
+            body: JSON.stringify({
+                device_id:  DEVICE_ID,
+                command:    cmd,
+                session_id: SESSION_ID,
+            }),
+        });
+
+        if (!r.ok) {
+            const err = await r.json();
+            spinner.remove();
+            appendEntry(cmd, err.error || 'Request failed.', true, 0);
+            setRunning(false);
+            return;
+        }
+
+        const { task_id } = await r.json();
+
+        // Poll until done
+        await poll(task_id, cmd, spinner);
+
+    } catch (e) {
+        spinner.remove();
+        appendEntry(cmd, `Network error: ${e.message}`, true, 0);
+        setRunning(false);
+    }
+}
+
+async function poll(taskId, cmd, spinner) {
+    const INTERVAL = 500;
+    const TIMEOUT  = 55_000;
+    const start    = Date.now();
+
+    return new Promise(resolve => {
+        const id = setInterval(async () => {
+            if (Date.now() - start > TIMEOUT) {
+                clearInterval(id);
+                spinner.remove();
+                appendEntry(cmd, 'Timed out waiting for task result.', true, 0);
+                setRunning(false);
+                resolve();
+                return;
+            }
+            try {
+                const r    = await fetch(`/api/cli/task/${taskId}/`, { credentials: 'same-origin' });
+                const data = await r.json();
+                if (data.state === 'PENDING') return;
+
+                clearInterval(id);
+                spinner.remove();
+                appendEntry(cmd, data.output ?? '', data.is_error ?? false, data.duration_ms ?? 0);
+                setRunning(false);
+                resolve();
+            } catch { /* keep polling */ }
+        }, INTERVAL);
+    });
+}
+
+function setRunning(running) {
+    btnRun.disabled = running;
+    input.disabled  = running;
+    if (!running) input.focus();
+}
+
+// ── Input handlers ────────────────────────────────────────────────────────────
+btnRun.addEventListener('click', () => {
+    const cmd = input.value.trim();
+    if (!cmd) return;
+    input.value = '';
+    runCommand(cmd);
+});
+
+input.addEventListener('keydown', e => {
+    if (e.key === 'Enter') {
+        e.preventDefault();
+        const cmd = input.value.trim();
+        if (!cmd) return;
+        input.value = '';
+        runCommand(cmd);
+        return;
+    }
+    if (e.key === 'ArrowUp') {
+        e.preventDefault();
+        if (historyIdx < cmdHistory.length - 1) {
+            historyIdx++;
+            input.value = cmdHistory[historyIdx];
+        }
+        return;
+    }
+    if (e.key === 'ArrowDown') {
+        e.preventDefault();
+        if (historyIdx > 0) {
+            historyIdx--;
+            input.value = cmdHistory[historyIdx];
+        } else {
+            historyIdx  = -1;
+            input.value = '';
+        }
+    }
+});
+
+// ── Clear ─────────────────────────────────────────────────────────────────────
+document.getElementById('btn-clear').addEventListener('click', () => {
+    output.innerHTML = `<div class="term-banner">── Screen cleared ──</div>`;
+});
+
+// ── Export ────────────────────────────────────────────────────────────────────
+document.getElementById('btn-export').addEventListener('click', async () => {
+    try {
+        const r    = await fetch(`/api/cli/sessions/${SESSION_ID}/history/`, { credentials: 'same-origin' });
+        const cmds = await r.json();
+        const lines = cmds.map(c =>
+            `${HOSTNAME}# ${c.command}\n${c.output}\n`
+        ).join('\n');
+        const blob = new Blob([lines], { type: 'text/plain' });
+        const url  = URL.createObjectURL(blob);
+        const a    = document.createElement('a');
+        a.href     = url;
+        a.download = `${HOSTNAME}-session-${SESSION_ID}.txt`;
+        a.click();
+        URL.revokeObjectURL(url);
+    } catch (e) {
+        appendBanner('Export failed.', 'error');
+    }
+});
+
+// ── Session selector ──────────────────────────────────────────────────────────
+document.getElementById('session-select').addEventListener('change', function() {
+    window.location.href = `?session=${this.value}`;
+});
+
+// ── New session ───────────────────────────────────────────────────────────────
+document.getElementById('btn-new-session').addEventListener('click', async () => {
+    const name = prompt('Session name (optional):') ?? '';
+    try {
+        const r = await fetch('/api/cli/sessions/', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken'),
+            },
+            credentials: 'same-origin',
+            body: JSON.stringify({ device: DEVICE_ID, name }),
+        });
+        const s = await r.json();
+        window.location.href = `?session=${s.id}`;
+    } catch { appendBanner('Could not create session.', 'error'); }
+});
+
+// ── Rename session ────────────────────────────────────────────────────────────
+document.getElementById('btn-rename-session').addEventListener('click', async () => {
+    const name = prompt('New session name:');
+    if (name === null) return;
+    try {
+        await fetch(`/api/cli/sessions/${SESSION_ID}/`, {
+            method: 'PATCH',
+            headers: {
+                'Content-Type': 'application/json',
+                'X-CSRFToken': getCookie('csrftoken'),
+            },
+            credentials: 'same-origin',
+            body: JSON.stringify({ name }),
+        });
+        location.reload();
+    } catch { appendBanner('Could not rename session.', 'error'); }
+});
+
+// ── Delete session ────────────────────────────────────────────────────────────
+document.getElementById('btn-delete-session').addEventListener('click', async () => {
+    if (!confirm('Delete this session and all its command history?')) return;
+    try {
+        await fetch(`/api/cli/sessions/${SESSION_ID}/`, {
+            method: 'DELETE',
+            headers: { 'X-CSRFToken': getCookie('csrftoken') },
+            credentials: 'same-origin',
+        });
+        window.location.href = `{% url 'inventory:device_cli' device.pk %}`;
+    } catch { appendBanner('Could not delete session.', 'error'); }
+});
+
+// ── Helpers ───────────────────────────────────────────────────────────────────
+function getCookie(name) {
+    const v = document.cookie.match('(^|;) ?' + name + '=([^;]*)(;|$)');
+    return v ? v[2] : '';
+}
+
+// ── Boot ──────────────────────────────────────────────────────────────────────
+loadHistory();
+input.focus();
+</script>
+{% endblock %}

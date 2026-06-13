@@ -15,6 +15,7 @@ from apps.provisioning.api import (
     task_status_view,
 )
 from apps.monitoring.api import AlertViewSet, alerts_webhook
+from apps.cli.api import CLISessionViewSet, execute_command, cli_task_status, session_history
 from apps.security.api import (
     ComplianceRuleViewSet,
     ComplianceResultViewSet,
@@ -37,6 +38,7 @@ router.register(r'security/rules',         ComplianceRuleViewSet,       basename
 router.register(r'security/results',       ComplianceResultViewSet,     basename='sec-result')
 router.register(r'security/golden',        GoldenConfigViewSet,         basename='sec-golden')
 router.register(r'security/drift',         DriftResultViewSet,          basename='sec-drift')
+router.register(r'cli/sessions',           CLISessionViewSet,           basename='cli-session')
 
 urlpatterns = [
     # ── JWT (custom serializer embeds role + flags in token claims) ───────────
@@ -61,6 +63,11 @@ urlpatterns = [
     path('security/compliance/run-all/',              run_all_compliance_view,   name='sec-run-all-compliance'),
     path('security/drift/run/<int:device_id>/',       run_drift_view,            name='sec-run-drift'),
     path('security/drift/run-all/',                   run_all_drift_view,        name='sec-run-all-drift'),
+
+    # ── CLI Console ───────────────────────────────────────────────────────────
+    path('cli/execute/',                     execute_command,   name='cli-execute'),
+    path('cli/task/<str:task_id>/',          cli_task_status,   name='cli-task-status'),
+    path('cli/sessions/<int:session_id>/history/', session_history, name='cli-session-history'),
 
     # ── OpenAPI schema + docs ─────────────────────────────────────────────────
     path('schema/',  SpectacularAPIView.as_view(),                    name='schema'),

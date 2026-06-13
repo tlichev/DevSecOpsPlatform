@@ -37,8 +37,12 @@
         <button class="btn-ghost" id="btn-poll" data-device-id="{{ device.pk }}">
             <i class="bi bi-arrow-repeat" id="poll-icon"></i> Poll Now
         </button>
+        <a href="{% url 'inventory:device_cli' device.pk %}" class="btn-primary-dark"
+           style="background:#22c55e22;color:#22c55e;border-color:#22c55e44">
+            <i class="bi bi-terminal-fill"></i> Open CLI
+        </a>
         <a href="{% url 'provisioning:push_config' %}" class="btn-primary-dark">
-            <i class="bi bi-terminal-fill"></i> Provision
+            <i class="bi bi-layers-fill"></i> Provision
         </a>
         {% if request.user.is_engineer %}
         <a href="{% url 'inventory:device_edit' device.pk %}" class="btn-ghost">
@@ -168,6 +172,12 @@
                         data-device-id="{{ device.pk }}">
                     <i class="bi bi-arrow-repeat"></i> Poll status now
                 </button>
+                {% if request.user.is_engineer %}
+                <a href="{% url 'inventory:device_cli' device.pk %}"
+                   class="btn-ghost w-100 justify-content-start" style="color:#22c55e">
+                    <i class="bi bi-terminal-fill"></i> Open CLI console
+                </a>
+                {% endif %}
                 <a href="{% url 'provisioning:push_config' %}?device={{ device.pk }}"
                    class="btn-ghost w-100 justify-content-start">
                     <i class="bi bi-terminal-fill"></i> Push configuration

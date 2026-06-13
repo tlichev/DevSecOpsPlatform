@@ -70,7 +70,7 @@ scrape_configs:
 
   - job_name: 'snmp_r_sofia'
     static_configs:
-      - targets: ['192.168.100.12']
+      - targets: ['192.168.1.100']
     metrics_path: /snmp
     params:
       module: [if_mib]

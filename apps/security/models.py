@@ -41,7 +41,7 @@ class ComplianceRule(models.Model):
     def __str__(self):
         return f'[{self.category}] {self.name}'
 
-    def check(self, running_config: str) -> bool:
+    def evaluate(self, running_config: str) -> bool:
         """Return True if the device PASSES this rule."""
         matched = bool(re.search(self.pattern, running_config, re.MULTILINE | re.IGNORECASE))
         return matched if self.match_means_pass else not matched

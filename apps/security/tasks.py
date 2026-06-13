@@ -71,7 +71,7 @@ def run_compliance_checks(self, device_id: int) -> dict:
             error_msg = f'Could not fetch config: {fetch_error}'
         else:
             try:
-                passed   = rule.check(running_config)
+                passed   = rule.evaluate(running_config)
                 evidence = rule.get_evidence(running_config)
                 status   = ComplianceResult.STATUS_PASS if passed else ComplianceResult.STATUS_FAIL
                 error_msg = ''

@@ -63,55 +63,55 @@ class ComplianceRuleCheckTest(TestCase):
 
     def test_presence_check_passes_when_found(self):
         rule = self._make_rule(r'ip ssh version 2', match_means_pass=True)
-        self.assertTrue(rule.check(COMPLIANT_CONFIG))
+        self.assertTrue(rule.evaluate(COMPLIANT_CONFIG))
 
     def test_presence_check_fails_when_absent(self):
         rule = self._make_rule(r'ip ssh version 2', match_means_pass=True)
-        self.assertFalse(rule.check(NON_COMPLIANT_CONFIG))
+        self.assertFalse(rule.evaluate(NON_COMPLIANT_CONFIG))
 
     def test_aaa_new_model_present(self):
         rule = self._make_rule(r'aaa new-model', match_means_pass=True, severity='critical')
-        self.assertTrue(rule.check(COMPLIANT_CONFIG))
-        self.assertFalse(rule.check(NON_COMPLIANT_CONFIG))
+        self.assertTrue(rule.evaluate(COMPLIANT_CONFIG))
+        self.assertFalse(rule.evaluate(NON_COMPLIANT_CONFIG))
 
     def test_ntp_server_present(self):
         rule = self._make_rule(r'ntp server \S+', match_means_pass=True)
-        self.assertTrue(rule.check(COMPLIANT_CONFIG))
-        self.assertFalse(rule.check(NON_COMPLIANT_CONFIG))
+        self.assertTrue(rule.evaluate(COMPLIANT_CONFIG))
+        self.assertFalse(rule.evaluate(NON_COMPLIANT_CONFIG))
 
     def test_ospf_md5_auth_present(self):
         rule = self._make_rule(r'authentication message-digest', match_means_pass=True)
-        self.assertTrue(rule.check(COMPLIANT_CONFIG))
-        self.assertFalse(rule.check(NON_COMPLIANT_CONFIG))
+        self.assertTrue(rule.evaluate(COMPLIANT_CONFIG))
+        self.assertFalse(rule.evaluate(NON_COMPLIANT_CONFIG))
 
     def test_service_password_encryption(self):
         rule = self._make_rule(r'service password-encryption', match_means_pass=True)
-        self.assertTrue(rule.check(COMPLIANT_CONFIG))
-        self.assertFalse(rule.check(NON_COMPLIANT_CONFIG))
+        self.assertTrue(rule.evaluate(COMPLIANT_CONFIG))
+        self.assertFalse(rule.evaluate(NON_COMPLIANT_CONFIG))
 
     # Absence checks (match_means_pass=False)
 
     def test_telnet_disabled_passes_when_absent(self):
         rule = self._make_rule(r'transport input telnet', match_means_pass=False, severity='critical')
-        self.assertTrue(rule.check(COMPLIANT_CONFIG))
+        self.assertTrue(rule.evaluate(COMPLIANT_CONFIG))
 
     def test_telnet_disabled_fails_when_present(self):
         rule = self._make_rule(r'transport input telnet', match_means_pass=False, severity='critical')
-        self.assertFalse(rule.check(NON_COMPLIANT_CONFIG))
+        self.assertFalse(rule.evaluate(NON_COMPLIANT_CONFIG))
 
     def test_enable_password_absent_passes(self):
         rule = self._make_rule(r'^enable password', match_means_pass=False, severity='critical')
-        self.assertTrue(rule.check(COMPLIANT_CONFIG))
+        self.assertTrue(rule.evaluate(COMPLIANT_CONFIG))
 
     def test_enable_password_absent_fails_when_set(self):
         rule = self._make_rule(r'^enable password', match_means_pass=False, severity='critical')
-        self.assertFalse(rule.check(NON_COMPLIANT_CONFIG))
+        self.assertFalse(rule.evaluate(NON_COMPLIANT_CONFIG))
 
     # Case insensitivity
 
     def test_pattern_is_case_insensitive(self):
         rule = self._make_rule(r'IP SSH VERSION 2', match_means_pass=True)
-        self.assertTrue(rule.check(COMPLIANT_CONFIG))
+        self.assertTrue(rule.evaluate(COMPLIANT_CONFIG))
 
 
 class ComplianceRuleEvidenceTest(TestCase):

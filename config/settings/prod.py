@@ -16,13 +16,6 @@ DATABASES = {
         'NAME': BASE_DIR / 'db.sqlite3',
         'OPTIONS': {
             'timeout': 30,
-            'init_command': (
-                'PRAGMA journal_mode=WAL;'
-                'PRAGMA synchronous=NORMAL;'
-                'PRAGMA foreign_keys=ON;'
-                'PRAGMA cache_size=-64000;'  # 64 MB page cache
-                'PRAGMA temp_store=MEMORY;'
-            ),
         },
     }
 }

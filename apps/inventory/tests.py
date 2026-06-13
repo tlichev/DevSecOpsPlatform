@@ -85,6 +85,23 @@ class DeviceAPITest(TestCase):
         self.assertEqual(resp.status_code, status.HTTP_201_CREATED)
         self.assertEqual(Device.objects.count(), 2)
 
+    def test_device_delete_as_engineer(self):
+        self.client.force_authenticate(user=self.engineer)
+        resp = self.client.delete(f'/api/devices/{self.device.pk}/')
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+        self.assertEqual(Device.objects.count(), 0)
+
+    def test_device_delete_as_admin(self):
+        self.client.force_authenticate(user=self.admin)
+        resp = self.client.delete(f'/api/devices/{self.device.pk}/')
+        self.assertEqual(resp.status_code, status.HTTP_204_NO_CONTENT)
+
+    def test_device_delete_blocked_for_readonly(self):
+        self.client.force_authenticate(user=self.readonly)
+        resp = self.client.delete(f'/api/devices/{self.device.pk}/')
+        self.assertEqual(resp.status_code, status.HTTP_403_FORBIDDEN)
+        self.assertEqual(Device.objects.count(), 1)
+
     def test_device_filter_by_site(self):
         Device.objects.create(
             hostname='FW-SOFIA-01',
@@ -126,13 +143,13 @@ class DashboardStatsTest(TestCase):
         self.client.force_authenticate(user=self.user)
         resp = self.client.get('/api/dashboard/stats/')
         self.assertEqual(resp.status_code, status.HTTP_200_OK)
-        self.assertIn('total', resp.data)
-        self.assertIn('up', resp.data)
-        self.assertIn('down', resp.data)
+        self.assertIn('total_devices', resp.data)
+        self.assertIn('devices_up', resp.data)
+        self.assertIn('devices_down', resp.data)
 
     def test_stats_counts_match_db(self):
         self.client.force_authenticate(user=self.user)
         resp = self.client.get('/api/dashboard/stats/')
-        self.assertEqual(resp.data['total'], 2)
-        self.assertEqual(resp.data['up'],    1)
-        self.assertEqual(resp.data['down'],  1)
+        self.assertEqual(resp.data['total_devices'], 2)
+        self.assertEqual(resp.data['devices_up'],    1)
+        self.assertEqual(resp.data['devices_down'],  1)

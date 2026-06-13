@@ -1,8 +1,11 @@
-from django.shortcuts import render, get_object_or_404
+from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
+from django.contrib import messages
 from django.db.models import Q, Count
 
+from apps.accounts.decorators import engineer_required
 from .models import Device
+from .forms import DeviceForm
 
 
 @login_required
@@ -71,6 +74,53 @@ def device_detail(request, pk):
         'device':        device,
         'recent_events': recent_events,
     })
+
+
+@engineer_required
+def device_create(request):
+    if request.method == 'POST':
+        form = DeviceForm(request.POST)
+        if form.is_valid():
+            device = form.save()
+            messages.success(request, f'Device {device.hostname} added to inventory.')
+            return redirect('inventory:device_detail', pk=device.pk)
+    else:
+        form = DeviceForm()
+    return render(request, 'inventory/device_form.html', {
+        'form': form,
+        'title': 'Add Device',
+        'action': 'Add Device',
+    })
+
+
+@engineer_required
+def device_edit(request, pk):
+    device = get_object_or_404(Device, pk=pk)
+    if request.method == 'POST':
+        form = DeviceForm(request.POST, instance=device)
+        if form.is_valid():
+            form.save()
+            messages.success(request, f'{device.hostname} updated successfully.')
+            return redirect('inventory:device_detail', pk=device.pk)
+    else:
+        form = DeviceForm(instance=device)
+    return render(request, 'inventory/device_form.html', {
+        'form': form,
+        'device': device,
+        'title': f'Edit {device.hostname}',
+        'action': 'Save Changes',
+    })
+
+
+@engineer_required
+def device_delete(request, pk):
+    device = get_object_or_404(Device, pk=pk)
+    if request.method == 'POST':
+        hostname = device.hostname
+        device.delete()
+        messages.success(request, f'Device {hostname} removed from inventory.')
+        return redirect('inventory:device_list')
+    return redirect('inventory:device_detail', pk=pk)
 
 
 @login_required

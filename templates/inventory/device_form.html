@@ -1,0 +1,213 @@
+{% extends 'base.html' %}
+{% load static %}
+
+{% block title %}{{ title }} — NetOps Platform{% endblock %}
+
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'inventory:device_list' %}">Inventory</a></li>
+{% if device %}
+<li class="breadcrumb-item">
+    <a href="{% url 'inventory:device_detail' device.pk %}">{{ device.hostname }}</a>
+</li>
+<li class="breadcrumb-item active">Edit</li>
+{% else %}
+<li class="breadcrumb-item active">Add Device</li>
+{% endif %}
+{% endblock %}
+
+{% block content %}
+
+<div class="page-header d-flex align-items-start justify-content-between flex-wrap gap-3">
+    <div>
+        <h1>
+            <i class="bi bi-{% if device %}pencil-square{% else %}plus-circle{% endif %} me-2"
+               style="color:var(--blue)"></i>{{ title }}
+        </h1>
+        <p>{% if device %}Update device properties and credentials.{% else %}Register a new device in the managed inventory.{% endif %}</p>
+    </div>
+    <a href="{% if device %}{% url 'inventory:device_detail' device.pk %}{% else %}{% url 'inventory:device_list' %}{% endif %}"
+       class="btn-ghost">
+        <i class="bi bi-arrow-left"></i> Cancel
+    </a>
+</div>
+
+<form method="post" class="form-dark" novalidate>
+    {% csrf_token %}
+
+    <div class="row g-3">
+
+        <!-- ── Left: Identity & Classification ─────────────────────────────── -->
+        <div class="col-12 col-lg-7">
+            <div class="card mb-3">
+                <div class="card-header">
+                    <span class="card-header-title">
+                        <i class="bi bi-info-circle"></i> Identity &amp; Classification
+                    </span>
+                </div>
+                <div class="card-body">
+
+                    <div class="row g-3">
+                        <div class="col-md-6">
+                            <label class="form-label" for="{{ form.hostname.id_for_label }}">
+                                Hostname <span style="color:var(--red)">*</span>
+                            </label>
+                            {{ form.hostname }}
+                            {% if form.hostname.errors %}
+                            <div class="form-error">{{ form.hostname.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="{{ form.ip_address.id_for_label }}">
+                                Management IP <span style="color:var(--red)">*</span>
+                            </label>
+                            {{ form.ip_address }}
+                            {% if form.ip_address.errors %}
+                            <div class="form-error">{{ form.ip_address.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="{{ form.wan_ip.id_for_label }}">WAN IP</label>
+                            {{ form.wan_ip }}
+                            {% if form.wan_ip.errors %}
+                            <div class="form-error">{{ form.wan_ip.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="{{ form.loopback_ip.id_for_label }}">Loopback / OSPF RID</label>
+                            {{ form.loopback_ip }}
+                            {% if form.loopback_ip.errors %}
+                            <div class="form-error">{{ form.loopback_ip.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="{{ form.site.id_for_label }}">
+                                Site <span style="color:var(--red)">*</span>
+                            </label>
+                            {{ form.site }}
+                            {% if form.site.errors %}
+                            <div class="form-error">{{ form.site.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-6">
+                            <label class="form-label" for="{{ form.device_type.id_for_label }}">
+                                Device Type <span style="color:var(--red)">*</span>
+                            </label>
+                            {{ form.device_type }}
+                            {% if form.device_type.errors %}
+                            <div class="form-error">{{ form.device_type.errors.0 }}</div>
+                            {% endif %}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" for="{{ form.vendor.id_for_label }}">Vendor</label>
+                            {{ form.vendor }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" for="{{ form.model.id_for_label }}">Model</label>
+                            {{ form.model }}
+                        </div>
+                        <div class="col-md-4">
+                            <label class="form-label" for="{{ form.os_version.id_for_label }}">OS Version</label>
+                            {{ form.os_version }}
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label" for="{{ form.description.id_for_label }}">Description</label>
+                            {{ form.description }}
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+        </div>
+
+        <!-- ── Right: Connectivity ──────────────────────────────────────────── -->
+        <div class="col-12 col-lg-5">
+            <div class="card mb-3">
+                <div class="card-header">
+                    <span class="card-header-title">
+                        <i class="bi bi-terminal"></i> Connectivity
+                    </span>
+                </div>
+                <div class="card-body">
+
+                    <div class="row g-3">
+                        <div class="col-8">
+                            <label class="form-label" for="{{ form.snmp_community.id_for_label }}">SNMP Community</label>
+                            {{ form.snmp_community }}
+                        </div>
+                        <div class="col-4">
+                            <label class="form-label" for="{{ form.snmp_version.id_for_label }}">SNMP Version</label>
+                            {{ form.snmp_version }}
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label" for="{{ form.ssh_username.id_for_label }}">SSH Username</label>
+                            {{ form.ssh_username }}
+                        </div>
+                        <div class="col-12">
+                            <label class="form-label" for="id_ssh_password_plain">SSH Password</label>
+                            <div style="position:relative">
+                                {{ form.ssh_password_plain }}
+                                <button type="button" id="toggle-pw"
+                                        style="position:absolute;right:10px;top:50%;transform:translateY(-50%);
+                                               background:none;border:none;color:var(--text-muted);cursor:pointer;padding:0">
+                                    <i class="bi bi-eye" id="pw-eye"></i>
+                                </button>
+                            </div>
+                            {% if device and device.ssh_password %}
+                            <div style="font-size:12px;color:var(--text-muted);margin-top:4px">
+                                <i class="bi bi-lock-fill" style="color:var(--green)"></i>
+                                Password is set. Leave blank to keep it unchanged.
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+
+                </div>
+            </div>
+
+            <!-- Non-field errors -->
+            {% if form.non_field_errors %}
+            <div class="card mb-3" style="border-color:var(--red)">
+                <div class="card-body" style="color:var(--red)">
+                    {% for error in form.non_field_errors %}
+                    <p style="margin:0"><i class="bi bi-exclamation-triangle-fill me-2"></i>{{ error }}</p>
+                    {% endfor %}
+                </div>
+            </div>
+            {% endif %}
+
+            <!-- Submit -->
+            <div class="d-flex gap-2">
+                <button type="submit" class="btn-primary-dark">
+                    <i class="bi bi-{% if device %}check-lg{% else %}plus-lg{% endif %}"></i>
+                    {{ action }}
+                </button>
+                <a href="{% if device %}{% url 'inventory:device_detail' device.pk %}{% else %}{% url 'inventory:device_list' %}{% endif %}"
+                   class="btn-ghost">
+                    Cancel
+                </a>
+            </div>
+
+        </div>
+    </div>
+</form>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+const pwInput = document.getElementById('id_ssh_password_plain');
+const pwEye   = document.getElementById('pw-eye');
+document.getElementById('toggle-pw')?.addEventListener('click', () => {
+    const show = pwInput.type === 'password';
+    pwInput.type = show ? 'text' : 'password';
+    pwEye.className = show ? 'bi bi-eye-slash' : 'bi bi-eye';
+});
+</script>
+<style>
+.form-error {
+    font-size: 12px;
+    color: var(--red, #ef4444);
+    margin-top: 4px;
+}
+</style>
+{% endblock %}

@@ -5,6 +5,7 @@ from rest_framework.response import Response
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.filters import SearchFilter, OrderingFilter
 
+from apps.accounts.permissions import IsEngineerOrReadOnly
 from .models import Device
 from .serializers import DeviceSerializer, DeviceListSerializer, DeviceStatusSerializer
 from .filters import DeviceFilter
@@ -13,6 +14,7 @@ from .tasks import poll_device, poll_all_devices, discover_network
 
 class DeviceViewSet(viewsets.ModelViewSet):
     queryset         = Device.objects.all()
+    permission_classes = [IsEngineerOrReadOnly]
     filter_backends  = [DjangoFilterBackend, SearchFilter, OrderingFilter]
     filterset_class  = DeviceFilter
     search_fields    = ['hostname', 'ip_address', 'description', 'model']

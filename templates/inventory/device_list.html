@@ -21,6 +21,11 @@
         <button class="btn-ghost" id="btn-poll-all">
             <i class="bi bi-arrow-repeat"></i> Poll All
         </button>
+        {% if request.user.is_engineer %}
+        <a href="{% url 'inventory:device_create' %}" class="btn-primary-dark">
+            <i class="bi bi-plus-lg"></i> Add Device
+        </a>
+        {% endif %}
     </div>
 </div>
 
@@ -198,6 +203,20 @@
                                     title="Poll now">
                                 <i class="bi bi-arrow-repeat"></i>
                             </button>
+                            {% if request.user.is_engineer %}
+                            <a href="{% url 'inventory:device_edit' device.pk %}"
+                               class="btn-ghost" style="padding:4px 8px;font-size:12px"
+                               title="Edit device">
+                                <i class="bi bi-pencil"></i>
+                            </a>
+                            <button type="button" class="btn-ghost btn-delete-row"
+                                    data-device-id="{{ device.pk }}"
+                                    data-hostname="{{ device.hostname }}"
+                                    style="padding:4px 8px;font-size:12px;color:#ef4444"
+                                    title="Remove device">
+                                <i class="bi bi-trash3"></i>
+                            </button>
+                            {% endif %}
                         </div>
                     </td>
                 </tr>
@@ -222,6 +241,42 @@
     </div>
     {% endif %}
 </div>
+
+<!-- ─── Delete confirmation modal ──────────────────────────────────────────── -->
+{% if request.user.is_engineer %}
+<div id="delete-modal" style="display:none;position:fixed;inset:0;z-index:1050;
+     background:rgba(0,0,0,.65);align-items:center;justify-content:center">
+    <div class="card" style="max-width:420px;width:90%;padding:0">
+        <div class="card-header" style="border-color:#ef444444">
+            <span class="card-header-title" style="color:#ef4444">
+                <i class="bi bi-exclamation-triangle-fill"></i> Remove Device
+            </span>
+        </div>
+        <div class="card-body">
+            <p style="margin-bottom:6px">
+                This will permanently remove
+                <strong id="modal-hostname" style="color:var(--text)"></strong>
+                from the managed inventory.
+            </p>
+            <p style="font-size:12px;color:var(--text-muted);margin:0">
+                Provisioning history and compliance results will also be deleted.
+            </p>
+        </div>
+        <div class="card-body d-flex gap-2 justify-content-end"
+             style="border-top:1px solid var(--border);padding-top:12px">
+            <button type="button" id="modal-cancel" class="btn-ghost">Cancel</button>
+            <form id="modal-delete-form" method="post" action="">
+                {% csrf_token %}
+                <button type="submit"
+                        style="background:#ef4444;color:#fff;border:none;border-radius:8px;
+                               padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer">
+                    <i class="bi bi-trash3-fill"></i> Remove
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
 
 {% endblock %}
 
@@ -275,6 +330,27 @@ document.getElementById('btn-discover').addEventListener('click', async () => {
         const data = await r.json();
         showToast(data.message || 'Discovery scan started…', 'info');
     } catch { showToast('Discovery failed', 'error'); }
+});
+
+// Delete modal
+const deleteModal   = document.getElementById('delete-modal');
+const modalHostname = document.getElementById('modal-hostname');
+const modalForm     = document.getElementById('modal-delete-form');
+
+document.querySelectorAll('.btn-delete-row').forEach(btn => {
+    btn.addEventListener('click', () => {
+        const id   = btn.dataset.deviceId;
+        const name = btn.dataset.hostname;
+        modalHostname.textContent = name;
+        modalForm.action = `/inventory/${id}/delete/`;
+        deleteModal.style.display = 'flex';
+    });
+});
+document.getElementById('modal-cancel')?.addEventListener('click', () => {
+    deleteModal.style.display = 'none';
+});
+deleteModal?.addEventListener('click', e => {
+    if (e.target === deleteModal) deleteModal.style.display = 'none';
 });
 
 function getCookie(name) {

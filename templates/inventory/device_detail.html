@@ -40,6 +40,15 @@
         <a href="{% url 'provisioning:push_config' %}" class="btn-primary-dark">
             <i class="bi bi-terminal-fill"></i> Provision
         </a>
+        {% if request.user.is_engineer %}
+        <a href="{% url 'inventory:device_edit' device.pk %}" class="btn-ghost">
+            <i class="bi bi-pencil"></i> Edit
+        </a>
+        <button type="button" id="btn-delete-device" class="btn-ghost"
+                style="color:#ef4444;border-color:#ef444444">
+            <i class="bi bi-trash3"></i> Remove
+        </button>
+        {% endif %}
     </div>
 </div>
 
@@ -227,6 +236,42 @@
 
     </div>
 </div>
+
+<!-- ─── Delete confirmation modal ──────────────────────────────────────────── -->
+{% if request.user.is_engineer %}
+<div id="delete-modal" style="display:none;position:fixed;inset:0;z-index:1050;
+     background:rgba(0,0,0,.65);align-items:center;justify-content:center">
+    <div class="card" style="max-width:420px;width:90%;padding:0">
+        <div class="card-header" style="border-color:#ef444444">
+            <span class="card-header-title" style="color:#ef4444">
+                <i class="bi bi-exclamation-triangle-fill"></i> Remove Device
+            </span>
+        </div>
+        <div class="card-body">
+            <p style="margin-bottom:6px">
+                Permanently remove <strong style="color:var(--text)">{{ device.hostname }}</strong>
+                from the managed inventory?
+            </p>
+            <p style="font-size:12px;color:var(--text-muted);margin:0">
+                All provisioning history, audit logs, and compliance results for this device will be deleted.
+            </p>
+        </div>
+        <div class="card-body d-flex gap-2 justify-content-end"
+             style="border-top:1px solid var(--border);padding-top:12px">
+            <button type="button" id="modal-cancel" class="btn-ghost">Cancel</button>
+            <form method="post" action="{% url 'inventory:device_delete' device.pk %}">
+                {% csrf_token %}
+                <button type="submit"
+                        style="background:#ef4444;color:#fff;border:none;border-radius:8px;
+                               padding:8px 18px;font-size:13px;font-weight:600;cursor:pointer">
+                    <i class="bi bi-trash3-fill"></i> Remove Device
+                </button>
+            </form>
+        </div>
+    </div>
+</div>
+{% endif %}
+
 {% endblock %}
 
 {% block extra_js %}

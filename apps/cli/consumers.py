@@ -56,7 +56,7 @@ class SSHConsumer(AsyncWebsocketConsumer):
         try:
             await self._loop.run_in_executor(None, self._open_ssh, device)
         except paramiko.AuthenticationException:
-            await self._write(b'\x1b[31mAuthentication failed — check SSH credentials.\x1b[0m\r\n')
+            await self._write(b'\x1b[31mAuthentication failed - check SSH credentials.\x1b[0m\r\n')
             await self.close()
             return
         except (paramiko.ssh_exception.NoValidConnectionsError, TimeoutError, OSError) as exc:

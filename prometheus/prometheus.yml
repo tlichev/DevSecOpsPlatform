@@ -32,12 +32,13 @@ scrape_configs:
     metrics_path: '/metrics'
 
   # ── SNMP: Sofia Site ──────────────────────────────────────────────────────
-  - job_name: 'snmp_sofia_prim'
+  - job_name: 'snmp_sofia_fw_primary'
     static_configs:
       - targets: ['192.168.100.10']
     metrics_path: /snmp
     params:
-      module: [if_mib]
+      module: [cisco_switch]
+      auth:   [public_v2]
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target
@@ -50,12 +51,13 @@ scrape_configs:
       - target_label: role
         replacement: firewall_primary
 
-  - job_name: 'snmp_sofia_sec'
+  - job_name: 'snmp_sofia_fw_secondary'
     static_configs:
       - targets: ['192.168.100.11']
     metrics_path: /snmp
     params:
-      module: [if_mib]
+      module: [cisco_switch]
+      auth:   [public_v2]
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target
@@ -68,12 +70,13 @@ scrape_configs:
       - target_label: role
         replacement: firewall_secondary
 
-  - job_name: 'snmp_r_sofia'
+  - job_name: 'snmp_sofia_router'
     static_configs:
       - targets: ['192.168.1.100']
     metrics_path: /snmp
     params:
-      module: [if_mib]
+      module: [cisco_switch]
+      auth:   [public_v2]
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target
@@ -87,12 +90,13 @@ scrape_configs:
         replacement: router
 
   # ── SNMP: Burgas Site ─────────────────────────────────────────────────────
-  - job_name: 'snmp_burgas_prim'
+  - job_name: 'snmp_burgas_fw_primary'
     static_configs:
       - targets: ['192.168.100.20']
     metrics_path: /snmp
     params:
-      module: [if_mib]
+      module: [cisco_switch]
+      auth:   [public_v2]
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target
@@ -105,12 +109,13 @@ scrape_configs:
       - target_label: role
         replacement: firewall_primary
 
-  - job_name: 'snmp_burgas_sec'
+  - job_name: 'snmp_burgas_fw_secondary'
     static_configs:
       - targets: ['192.168.100.21']
     metrics_path: /snmp
     params:
-      module: [if_mib]
+      module: [cisco_switch]
+      auth:   [public_v2]
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target
@@ -123,12 +128,13 @@ scrape_configs:
       - target_label: role
         replacement: firewall_secondary
 
-  - job_name: 'snmp_r_burgas'
+  - job_name: 'snmp_burgas_router'
     static_configs:
       - targets: ['192.168.100.22']
     metrics_path: /snmp
     params:
-      module: [if_mib]
+      module: [cisco_switch]
+      auth:   [public_v2]
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target
@@ -142,12 +148,13 @@ scrape_configs:
         replacement: router
 
   # ── SNMP: Plovdiv Site ────────────────────────────────────────────────────
-  - job_name: 'snmp_plovdiv_prim'
+  - job_name: 'snmp_plovdiv_fw_primary'
     static_configs:
       - targets: ['192.168.100.30']
     metrics_path: /snmp
     params:
-      module: [if_mib]
+      module: [cisco_switch]
+      auth:   [public_v2]
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target
@@ -160,12 +167,13 @@ scrape_configs:
       - target_label: role
         replacement: firewall_primary
 
-  - job_name: 'snmp_plovdiv_sec'
+  - job_name: 'snmp_plovdiv_fw_secondary'
     static_configs:
       - targets: ['192.168.100.31']
     metrics_path: /snmp
     params:
-      module: [if_mib]
+      module: [cisco_switch]
+      auth:   [public_v2]
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target
@@ -178,12 +186,13 @@ scrape_configs:
       - target_label: role
         replacement: firewall_secondary
 
-  - job_name: 'snmp_r_plovdiv'
+  - job_name: 'snmp_plovdiv_router'
     static_configs:
       - targets: ['192.168.100.32']
     metrics_path: /snmp
     params:
-      module: [if_mib]
+      module: [cisco_switch]
+      auth:   [public_v2]
     relabel_configs:
       - source_labels: [__address__]
         target_label: __param_target

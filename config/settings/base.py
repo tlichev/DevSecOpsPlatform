@@ -10,6 +10,7 @@ ALLOWED_HOSTS = [h.strip() for h in os.environ.get('ALLOWED_HOSTS', '').split(',
 
 # ── Apps ──────────────────────────────────────────────────────────────────────
 DJANGO_APPS = [
+    'daphne',              # must be first — before django.contrib.staticfiles
     'django.contrib.admin',
     'django.contrib.auth',
     'django.contrib.contenttypes',
@@ -19,7 +20,6 @@ DJANGO_APPS = [
 ]
 
 THIRD_PARTY_APPS = [
-    'daphne',              # must be before django.contrib.staticfiles for ASGI runserver
     'channels',
     'rest_framework',
     'rest_framework_simplejwt',

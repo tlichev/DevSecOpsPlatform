@@ -344,21 +344,23 @@ const deleteModal   = document.getElementById('delete-modal');
 const modalHostname = document.getElementById('modal-hostname');
 const modalForm     = document.getElementById('modal-delete-form');
 
-document.querySelectorAll('.btn-delete-row').forEach(btn => {
-    btn.addEventListener('click', () => {
-        const id   = btn.dataset.deviceId;
-        const name = btn.dataset.hostname;
-        modalHostname.textContent = name;
-        modalForm.action = `/inventory/${id}/delete/`;
-        deleteModal.style.display = 'flex';
+if (deleteModal && modalHostname && modalForm) {
+    document.querySelectorAll('.btn-delete-row').forEach(btn => {
+        btn.addEventListener('click', () => {
+            const id   = btn.dataset.deviceId;
+            const name = btn.dataset.hostname;
+            modalHostname.textContent = name;
+            modalForm.action = `/inventory/${id}/delete/`;
+            deleteModal.style.display = 'flex';
+        });
     });
-});
-document.getElementById('modal-cancel')?.addEventListener('click', () => {
-    deleteModal.style.display = 'none';
-});
-deleteModal?.addEventListener('click', e => {
-    if (e.target === deleteModal) deleteModal.style.display = 'none';
-});
+    document.getElementById('modal-cancel')?.addEventListener('click', () => {
+        deleteModal.style.display = 'none';
+    });
+    deleteModal.addEventListener('click', e => {
+        if (e.target === deleteModal) deleteModal.style.display = 'none';
+    });
+}
 
 function getCookie(name) {
     const v = document.cookie.match('(^|;) ?' + name + '=([^;]*)(;|$)');

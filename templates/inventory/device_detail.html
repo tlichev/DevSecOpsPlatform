@@ -316,6 +316,20 @@ document.getElementById('btn-poll-detail')?.addEventListener('click', function()
     pollDevice(this.dataset.deviceId, this.querySelector('i'), this);
 });
 
+// ── Delete modal ──────────────────────────────────────────────────────────
+const deleteModal = document.getElementById('delete-modal');
+document.getElementById('btn-delete-device')?.addEventListener('click', () => {
+    if (deleteModal) deleteModal.style.display = 'flex';
+});
+document.getElementById('modal-cancel')?.addEventListener('click', () => {
+    if (deleteModal) deleteModal.style.display = 'none';
+});
+if (deleteModal) {
+    deleteModal.addEventListener('click', e => {
+        if (e.target === deleteModal) deleteModal.style.display = 'none';
+    });
+}
+
 function getCookie(n) {
     const v = document.cookie.match('(^|;) ?' + n + '=([^;]*)(;|$)');
     return v ? v[2] : '';

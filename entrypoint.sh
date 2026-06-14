@@ -20,7 +20,6 @@ python manage.py migrate --noinput
 python manage.py collectstatic --noinput --clear
 
 if [ "$LOAD_FIXTURES" = "1" ]; then
-    python manage.py loaddata fixtures/devices.json || true
     python manage.py loaddata fixtures/compliance_rules.json || true
 fi
 

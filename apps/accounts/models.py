@@ -1,5 +1,8 @@
+import secrets
 from django.contrib.auth.models import AbstractUser
 from django.db import models
+from django.utils import timezone
+from datetime import timedelta
 
 
 class User(AbstractUser):
@@ -34,3 +37,31 @@ class User(AbstractUser):
             self.ROLE_READONLY: 'secondary',
         }
         return colors.get(self.role, 'secondary')
+
+
+class TwoFactorCode(models.Model):
+    OTP_EXPIRY_MINUTES = 10
+
+    user       = models.ForeignKey(User, on_delete=models.CASCADE, related_name='otp_codes')
+    code       = models.CharField(max_length=6)
+    created_at = models.DateTimeField(auto_now_add=True)
+    expires_at = models.DateTimeField()
+    used       = models.BooleanField(default=False)
+
+    class Meta:
+        ordering = ['-created_at']
+        indexes  = [models.Index(fields=['user', 'used'], name='accounts_otp_user_used_idx')]
+
+    def is_valid(self):
+        return not self.used and timezone.now() < self.expires_at
+
+    @classmethod
+    def generate_for(cls, user):
+        """Delete any existing codes for the user and create a fresh one."""
+        cls.objects.filter(user=user).delete()
+        code = f'{secrets.randbelow(1_000_000):06d}'
+        return cls.objects.create(
+            user=user,
+            code=code,
+            expires_at=timezone.now() + timedelta(minutes=cls.OTP_EXPIRY_MINUTES),
+        )

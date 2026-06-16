@@ -1,0 +1,131 @@
+{% extends 'base.html' %}
+{% block title %}File Templates — NetOps Platform{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'provisioning:home' %}">Provisioning</a></li>
+<li class="breadcrumb-item active">File Templates</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h1 class="h3 mb-1 fw-semibold">
+      <i class="bi bi-file-earmark-code me-2" style="color:var(--blue)"></i>File Templates
+    </h1>
+    <p class="text-secondary mb-0">
+      Jinja2 <code>.j2</code> files stored in <code>config_templates/</code>.
+      {{ templates|length }} template{{ templates|length|pluralize }} found.
+    </p>
+  </div>
+  <a href="{% url 'provisioning:file_template_create' %}" class="btn btn-primary btn-sm">
+    <i class="bi bi-plus-lg me-1"></i>New Template
+  </a>
+</div>
+
+<div class="card" style="background:var(--surface);border:1px solid var(--border)">
+  <div class="card-body p-0">
+    {% if templates %}
+    <div class="table-responsive">
+      <table class="table mb-0" style="color:var(--fg)">
+        <thead>
+          <tr style="border-bottom:1px solid var(--border)">
+            <th class="px-4 py-3 text-secondary" style="font-size:.75rem;font-weight:500;width:45%">NAME</th>
+            <th class="px-3 py-3 text-secondary" style="font-size:.75rem;font-weight:500">SIZE</th>
+            <th class="px-3 py-3 text-secondary" style="font-size:.75rem;font-weight:500">ACTIONS</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for t in templates %}
+          <tr style="border-bottom:1px solid var(--border)">
+            <td class="px-4 py-3">
+              <div class="d-flex align-items-center gap-2">
+                <i class="bi bi-filetype-raw" style="color:var(--text-dim);font-size:.85rem"></i>
+                <a href="{% url 'provisioning:file_template_detail' stem=t.stem %}"
+                   class="text-decoration-none"
+                   style="color:var(--blue);font-family:'JetBrains Mono',monospace;font-size:.875rem">
+                  {{ t.name }}
+                </a>
+              </div>
+            </td>
+            <td class="px-3 py-3 text-secondary" style="font-size:.85rem">
+              {{ t.size }} B
+            </td>
+            <td class="px-3 py-3">
+              <div class="d-flex gap-2 align-items-center">
+                <a href="{% url 'provisioning:file_template_detail' stem=t.stem %}"
+                   class="btn btn-sm btn-outline-secondary" style="font-size:.75rem;padding:.2rem .55rem"
+                   title="View">
+                  <i class="bi bi-eye"></i>
+                </a>
+                <a href="{% url 'provisioning:file_template_edit' stem=t.stem %}"
+                   class="btn btn-sm btn-outline-primary" style="font-size:.75rem;padding:.2rem .55rem"
+                   title="Edit">
+                  <i class="bi bi-pencil"></i>
+                </a>
+                <button type="button"
+                        class="btn btn-sm btn-outline-danger" style="font-size:.75rem;padding:.2rem .55rem"
+                        data-stem="{{ t.stem }}" data-name="{{ t.name }}"
+                        onclick="openDeleteModal(this)"
+                        title="Delete">
+                  <i class="bi bi-trash"></i>
+                </button>
+              </div>
+            </td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+    {% else %}
+    <div class="text-center py-5 text-secondary">
+      <i class="bi bi-file-earmark-x d-block mb-2" style="font-size:2.5rem;opacity:.4"></i>
+      <p class="mb-3">No file templates found.</p>
+      <a href="{% url 'provisioning:file_template_create' %}" class="btn btn-primary btn-sm">
+        <i class="bi bi-plus-lg me-1"></i>Create your first template
+      </a>
+    </div>
+    {% endif %}
+  </div>
+</div>
+
+<!-- Delete confirmation modal -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content" style="background:var(--surface);border:1px solid var(--border)">
+      <div class="modal-header" style="border-bottom:1px solid var(--border)">
+        <h6 class="modal-title" style="color:var(--fg)">
+          <i class="bi bi-exclamation-triangle-fill me-2" style="color:var(--red)"></i>Delete Template
+        </h6>
+        <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <p class="text-secondary mb-0" style="font-size:.9rem">
+          Delete <code id="modal-template-name" style="color:var(--blue)"></code>?
+          This cannot be undone.
+        </p>
+      </div>
+      <div class="modal-footer" style="border-top:1px solid var(--border)">
+        <button type="button" class="btn btn-sm btn-outline-secondary" data-bs-dismiss="modal">Cancel</button>
+        <form id="delete-form" method="post" action="" style="display:inline">
+          {% csrf_token %}
+          <button type="submit" class="btn btn-sm btn-danger">
+            <i class="bi bi-trash me-1"></i>Delete
+          </button>
+        </form>
+      </div>
+    </div>
+  </div>
+</div>
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function openDeleteModal(btn) {
+  const stem = btn.dataset.stem;
+  const name = btn.dataset.name;
+  document.getElementById('modal-template-name').textContent = name;
+  document.getElementById('delete-form').action = `/provisioning/file-templates/${stem}/delete/`;
+  new bootstrap.Modal(document.getElementById('deleteModal')).show();
+}
+</script>
+{% endblock %}

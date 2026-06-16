@@ -22,6 +22,13 @@ urlpatterns = [
     path('audit/',               views.audit_log,         name='audit_log'),
     path('audit/<int:pk>/',      views.audit_detail,      name='audit_detail'),
 
+    # File template management
+    path('file-templates/',                   views.file_template_list,   name='file_template_list'),
+    path('file-templates/new/',               views.file_template_create, name='file_template_create'),
+    path('file-templates/<str:stem>/',        views.file_template_detail, name='file_template_detail'),
+    path('file-templates/<str:stem>/edit/',   views.file_template_edit,   name='file_template_edit'),
+    path('file-templates/<str:stem>/delete/', views.file_template_delete, name='file_template_delete'),
+
     # REST API (also reachable at /api/provisioning/ via api/urls.py)
     path('api/',                          include(router.urls)),
     path('api/render/',                   render_preview_view, name='api-render'),

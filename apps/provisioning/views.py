@@ -1,12 +1,24 @@
+import re
+
 from django.shortcuts import render, get_object_or_404, redirect
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db.models import Q
+from jinja2 import Environment, TemplateSyntaxError
 
 from apps.inventory.models import Device
 from .models import ProvisioningTemplate, AuditLog
-from .template_engine import list_all_templates
+from .template_engine import list_all_templates, TEMPLATES_DIR, list_file_templates
+
+_SAFE_STEM = re.compile(r'^[a-z0-9_\-]+$')
+
+_TEMPLATE_VARS = [
+    'hostname', 'ip_address', 'wan_ip', 'loopback_ip',
+    'site', 'site_label', 'device_type', 'vendor', 'model',
+    'os_version', 'snmp_community', 'ssh_username',
+    'MGMT_NETWORK', 'NTP_SERVER', 'SYSLOG_SERVER',
+]
 
 
 def _engineer_required(func):
@@ -103,3 +115,121 @@ def audit_detail(request, pk):
         AuditLog.objects.select_related('device', 'user'), pk=pk
     )
     return render(request, 'provisioning/audit_detail.html', {'log': log})
+
+
+# ── File template management ─────────────────────────────────────────────────
+
+def _resolve_template_path(stem):
+    """Return a safe Path for stem.j2, or None if the name is invalid."""
+    if not _SAFE_STEM.match(stem):
+        return None
+    path = (TEMPLATES_DIR / stem).with_suffix('.j2')
+    try:
+        path.resolve().relative_to(TEMPLATES_DIR.resolve())
+    except ValueError:
+        return None
+    return path
+
+
+@_engineer_required
+def file_template_list(request):
+    templates = list_file_templates()
+    return render(request, 'provisioning/file_template_list.html', {
+        'templates': templates,
+    })
+
+
+@login_required
+def file_template_detail(request, stem):
+    path = _resolve_template_path(stem)
+    if not path or not path.exists():
+        messages.error(request, f'Template "{stem}.j2" not found.')
+        return redirect('provisioning:file_template_list')
+    content = path.read_text(encoding='utf-8')
+    return render(request, 'provisioning/file_template_detail.html', {
+        'stem':    stem,
+        'content': content,
+        'size':    path.stat().st_size,
+    })
+
+
+@_engineer_required
+def file_template_create(request):
+    if request.method == 'POST':
+        stem    = request.POST.get('name', '').strip().lower().replace(' ', '_')
+        content = request.POST.get('content', '')
+
+        if not _SAFE_STEM.match(stem):
+            messages.error(request, 'Invalid name — use only lowercase letters, digits, underscores, and hyphens.')
+            return render(request, 'provisioning/file_template_form.html', {
+                'stem': stem, 'content': content, 'mode': 'create',
+                'template_vars': _TEMPLATE_VARS,
+            })
+
+        path = _resolve_template_path(stem)
+        if path.exists():
+            messages.error(request, f'"{stem}.j2" already exists. Edit it instead.')
+            return render(request, 'provisioning/file_template_form.html', {
+                'stem': stem, 'content': content, 'mode': 'create',
+                'template_vars': _TEMPLATE_VARS,
+            })
+
+        try:
+            Environment().parse(content)
+        except TemplateSyntaxError as exc:
+            messages.error(request, f'Jinja2 syntax error: {exc}')
+            return render(request, 'provisioning/file_template_form.html', {
+                'stem': stem, 'content': content, 'mode': 'create',
+                'template_vars': _TEMPLATE_VARS,
+            })
+
+        TEMPLATES_DIR.mkdir(parents=True, exist_ok=True)
+        path.write_text(content, encoding='utf-8')
+        messages.success(request, f'Template "{stem}.j2" created.')
+        return redirect('provisioning:file_template_detail', stem=stem)
+
+    return render(request, 'provisioning/file_template_form.html', {
+        'stem': '', 'content': '', 'mode': 'create',
+        'template_vars': _TEMPLATE_VARS,
+    })
+
+
+@_engineer_required
+def file_template_edit(request, stem):
+    path = _resolve_template_path(stem)
+    if not path or not path.exists():
+        messages.error(request, f'Template "{stem}.j2" not found.')
+        return redirect('provisioning:file_template_list')
+
+    if request.method == 'POST':
+        content = request.POST.get('content', '')
+        try:
+            Environment().parse(content)
+        except TemplateSyntaxError as exc:
+            messages.error(request, f'Jinja2 syntax error: {exc}')
+            return render(request, 'provisioning/file_template_form.html', {
+                'stem': stem, 'content': content, 'mode': 'edit',
+                'template_vars': _TEMPLATE_VARS,
+            })
+        path.write_text(content, encoding='utf-8')
+        messages.success(request, f'Template "{stem}.j2" saved.')
+        return redirect('provisioning:file_template_detail', stem=stem)
+
+    content = path.read_text(encoding='utf-8')
+    return render(request, 'provisioning/file_template_form.html', {
+        'stem': stem, 'content': content, 'mode': 'edit',
+        'template_vars': _TEMPLATE_VARS,
+    })
+
+
+@_engineer_required
+def file_template_delete(request, stem):
+    if request.method != 'POST':
+        return redirect('provisioning:file_template_list')
+    path = _resolve_template_path(stem)
+    if path and path.exists():
+        path.unlink()
+        messages.success(request, f'Template "{stem}.j2" deleted.')
+    else:
+        messages.error(request, f'Template "{stem}.j2" not found.')
+    return redirect('provisioning:file_template_list')

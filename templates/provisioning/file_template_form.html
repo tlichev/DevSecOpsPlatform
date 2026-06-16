@@ -1,0 +1,177 @@
+{% extends 'base.html' %}
+{% block title %}{% if mode == 'create' %}New Template{% else %}Edit {{ stem }}.j2{% endif %} — NetOps Platform{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'provisioning:home' %}">Provisioning</a></li>
+<li class="breadcrumb-item"><a href="{% url 'provisioning:file_template_list' %}">File Templates</a></li>
+<li class="breadcrumb-item active">{% if mode == 'create' %}New{% else %}Edit {{ stem }}.j2{% endif %}</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h1 class="h3 mb-1 fw-semibold">
+      {% if mode == 'create' %}
+      <i class="bi bi-plus-circle me-2" style="color:var(--green)"></i>New File Template
+      {% else %}
+      <i class="bi bi-pencil-square me-2" style="color:var(--blue)"></i>Edit <code>{{ stem }}.j2</code>
+      {% endif %}
+    </h1>
+    <p class="text-secondary mb-0">
+      {% if mode == 'create' %}
+      Template will be saved to <code>config_templates/&lt;name&gt;.j2</code>.
+      {% else %}
+      Editing file template. Jinja2 syntax is validated before saving.
+      {% endif %}
+    </p>
+  </div>
+  <a href="{% if mode == 'edit' %}{% url 'provisioning:file_template_detail' stem=stem %}{% else %}{% url 'provisioning:file_template_list' %}{% endif %}"
+     class="btn btn-sm btn-outline-secondary">
+    <i class="bi bi-x-lg me-1"></i>Cancel
+  </a>
+</div>
+
+<form method="post">
+  {% csrf_token %}
+
+  <div class="row g-4">
+    <!-- Editor column -->
+    <div class="col-lg-9">
+
+      {% if mode == 'create' %}
+      <div class="card mb-3" style="background:var(--surface);border:1px solid var(--border)">
+        <div class="card-body">
+          <label class="form-label text-secondary" style="font-size:.75rem;font-weight:600;text-transform:uppercase;letter-spacing:.06em">
+            Template Name <span class="text-danger">*</span>
+          </label>
+          <div class="input-group input-group-sm">
+            <input type="text" name="name" value="{{ stem }}" required
+                   class="form-control"
+                   style="background:var(--surface-2);color:var(--fg);border-color:var(--border);font-family:'JetBrains Mono',monospace"
+                   placeholder="e.g. ospf_area0 or bgp_peer"
+                   pattern="[a-z0-9_\-]+"
+                   title="Lowercase letters, digits, underscores and hyphens only">
+            <span class="input-group-text" style="background:var(--surface-2);color:var(--text-dim);border-color:var(--border)">.j2</span>
+          </div>
+          <div class="form-text" style="color:var(--text-dim)">Lowercase letters, digits, underscores and hyphens only.</div>
+        </div>
+      </div>
+      {% endif %}
+
+      <div class="card" style="background:var(--surface);border:1px solid var(--border)">
+        <div class="card-header d-flex justify-content-between align-items-center"
+             style="background:transparent;border-bottom:1px solid var(--border);padding:.75rem 1rem">
+          <span class="text-secondary" style="font-size:.8rem;font-weight:500">
+            <i class="bi bi-code-slash me-2"></i>Jinja2 Content
+          </span>
+          <span class="text-secondary" style="font-size:.75rem" id="line-count"></span>
+        </div>
+        <div class="card-body p-0">
+          <textarea name="content" id="editor" rows="28"
+                    class="form-control border-0 rounded-0"
+                    style="background:#0d1117;color:#e6edf3;font-family:'JetBrains Mono',monospace;
+                           font-size:.82rem;line-height:1.6;resize:vertical;min-height:400px;
+                           border-radius:0 0 .375rem .375rem !important;padding:1rem 1.25rem"
+                    spellcheck="false"
+                    placeholder="! Enter your Jinja2 config template here...
+!
+! Available variables:
+!   {{ hostname }}, {{ ip_address }}, {{ site }}, {{ device_type }}
+!   {{ vendor }}, {{ os_version }}, {{ snmp_community }}
+!   {{ ssh_username }}, {{ wan_ip }}, {{ loopback_ip }}">{{ content }}</textarea>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sidebar -->
+    <div class="col-lg-3">
+
+      <!-- Save -->
+      <div class="card mb-3" style="background:var(--surface);border:1px solid var(--border)">
+        <div class="card-body">
+          <button type="submit" class="btn btn-primary w-100 mb-2">
+            <i class="bi bi-floppy-fill me-1"></i>
+            {% if mode == 'create' %}Create Template{% else %}Save Changes{% endif %}
+          </button>
+          <a href="{% if mode == 'edit' %}{% url 'provisioning:file_template_detail' stem=stem %}{% else %}{% url 'provisioning:file_template_list' %}{% endif %}"
+             class="btn btn-outline-secondary w-100 btn-sm">
+            Discard
+          </a>
+        </div>
+      </div>
+
+      <!-- Available variables -->
+      <div class="card mb-3" style="background:var(--surface);border:1px solid var(--border)">
+        <div class="card-header" style="background:transparent;border-bottom:1px solid var(--border);padding:.6rem .9rem">
+          <span style="font-size:.75rem;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em">
+            <i class="bi bi-braces me-1"></i>Variables
+          </span>
+        </div>
+        <div class="card-body p-2">
+          {% for var in template_vars %}
+          <code class="d-block px-2 py-1 rounded mb-1"
+                style="font-size:.75rem;color:var(--blue);background:rgba(59,130,246,.07);cursor:pointer"
+                onclick="insertVariable('{{ var }}')">
+            &#123;&#123; {{ var }} &#125;&#125;
+          </code>
+          {% endfor %}
+        </div>
+      </div>
+
+      <!-- Jinja2 tips -->
+      <div class="card" style="background:var(--surface);border:1px solid var(--border)">
+        <div class="card-header" style="background:transparent;border-bottom:1px solid var(--border);padding:.6rem .9rem">
+          <span style="font-size:.75rem;font-weight:600;color:var(--text-dim);text-transform:uppercase;letter-spacing:.06em">
+            <i class="bi bi-lightbulb me-1"></i>Tips
+          </span>
+        </div>
+        <div class="card-body p-3" style="font-size:.78rem;color:var(--text-dim);line-height:1.6">
+          <p class="mb-2"><code style="color:var(--amber)">&#123;% if ... %&#125;</code> conditions</p>
+          <p class="mb-2"><code style="color:var(--amber)">&#123;% for ... %&#125;</code> loops</p>
+          <p class="mb-2"><code style="color:var(--green)">&#123;# comment #&#125;</code> comments</p>
+          <p class="mb-0"><code style="color:var(--blue)">&#123;&#123; var|upper &#125;&#125;</code> filters</p>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</form>
+{% endblock %}
+
+{% block extra_js %}
+<script>
+// Line counter
+const editor = document.getElementById('editor');
+const lineCount = document.getElementById('line-count');
+function updateLineCount() {
+  const lines = editor.value.split('\n').length;
+  lineCount.textContent = `${lines} line${lines !== 1 ? 's' : ''}`;
+}
+editor.addEventListener('input', updateLineCount);
+updateLineCount();
+
+// Tab key inserts spaces instead of leaving field
+editor.addEventListener('keydown', function(e) {
+  if (e.key === 'Tab') {
+    e.preventDefault();
+    const start = this.selectionStart;
+    const end   = this.selectionEnd;
+    this.value  = this.value.substring(0, start) + ' ' + this.value.substring(end);
+    this.selectionStart = this.selectionEnd = start + 1;
+    updateLineCount();
+  }
+});
+
+// Click a variable chip to insert it at cursor
+function insertVariable(varName) {
+  const token = `{{ ${varName} }}`;
+  const start = editor.selectionStart;
+  const end   = editor.selectionEnd;
+  editor.value = editor.selectionStart === editor.selectionEnd
+    ? editor.value.substring(0, start) + token + editor.value.substring(end)
+    : editor.value.substring(0, start) + token + editor.value.substring(end);
+  editor.selectionStart = editor.selectionEnd = start + token.length;
+  editor.focus();
+  updateLineCount();
+}
+</script>
+{% endblock %}

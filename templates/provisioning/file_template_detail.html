@@ -1,0 +1,110 @@
+{% extends 'base.html' %}
+{% block title %}{{ stem }}.j2 — NetOps Platform{% endblock %}
+{% block breadcrumb %}
+<li class="breadcrumb-item"><a href="{% url 'provisioning:home' %}">Provisioning</a></li>
+<li class="breadcrumb-item"><a href="{% url 'provisioning:file_template_list' %}">File Templates</a></li>
+<li class="breadcrumb-item active">{{ stem }}.j2</li>
+{% endblock %}
+
+{% block content %}
+<div class="d-flex justify-content-between align-items-center mb-4">
+  <div>
+    <h1 class="h3 mb-1 fw-semibold">
+      <i class="bi bi-file-earmark-code me-2" style="color:var(--blue)"></i>
+      <code style="font-size:1rem">{{ stem }}.j2</code>
+    </h1>
+    <p class="text-secondary mb-0">{{ size }} bytes</p>
+  </div>
+  <div class="d-flex gap-2">
+    {% if request.user.is_engineer %}
+    <a href="{% url 'provisioning:file_template_edit' stem=stem %}" class="btn btn-primary btn-sm">
+      <i class="bi bi-pencil me-1"></i>Edit
+    </a>
+    <button type="button" class="btn btn-sm btn-outline-danger"
+            onclick="document.getElementById('delete-modal').style.display='flex'">
+      <i class="bi bi-trash me-1"></i>Delete
+    </button>
+    {% endif %}
+    <a href="{% url 'provisioning:file_template_list' %}" class="btn btn-sm btn-outline-secondary">
+      <i class="bi bi-arrow-left me-1"></i>Back
+    </a>
+  </div>
+</div>
+
+<!-- Code viewer -->
+<div class="card" style="background:var(--surface);border:1px solid var(--border)">
+  <div class="card-header d-flex justify-content-between align-items-center"
+       style="background:transparent;border-bottom:1px solid var(--border);padding:.75rem 1.25rem">
+    <span class="text-secondary" style="font-size:.8rem">
+      <i class="bi bi-code-slash me-2"></i>Jinja2 Source
+    </span>
+    <button class="btn btn-sm btn-outline-secondary" style="font-size:.75rem;padding:.2rem .6rem"
+            onclick="copyContent()" id="copy-btn">
+      <i class="bi bi-clipboard me-1"></i>Copy
+    </button>
+  </div>
+  <div class="card-body p-0">
+    <pre id="template-content"
+         style="background:#0d1117;color:#e6edf3;font-family:'JetBrains Mono',monospace;
+                font-size:.82rem;line-height:1.6;margin:0;padding:1.25rem;
+                border-radius:0 0 .375rem .375rem;overflow-x:auto;white-space:pre-wrap;word-break:break-all">{{ content }}</pre>
+  </div>
+</div>
+
+<!-- Quick-use hint -->
+{% if request.user.is_engineer %}
+<div class="mt-3 p-3 rounded" style="background:rgba(59,130,246,.06);border:1px solid rgba(59,130,246,.2)">
+  <span style="font-size:.85rem;color:var(--text-dim)">
+    <i class="bi bi-info-circle me-2" style="color:var(--blue)"></i>
+    Use this template in a push:
+    <a href="{% url 'provisioning:push_config' %}?template={{ stem }}.j2"
+       style="color:var(--blue);margin-left:.3rem">
+      Open in Push Config <i class="bi bi-arrow-right"></i>
+    </a>
+  </span>
+</div>
+{% endif %}
+
+<!-- Delete confirmation overlay -->
+{% if request.user.is_engineer %}
+<div id="delete-modal"
+     style="display:none;position:fixed;inset:0;background:rgba(0,0,0,.6);z-index:9999;
+            align-items:center;justify-content:center">
+  <div style="background:var(--surface);border:1px solid var(--border);border-radius:12px;
+              padding:28px 32px;max-width:380px;width:90%">
+    <h6 style="color:var(--fg);margin-bottom:10px">
+      <i class="bi bi-exclamation-triangle-fill me-2" style="color:var(--red)"></i>Delete Template
+    </h6>
+    <p style="color:var(--text-dim);font-size:.9rem;margin-bottom:20px">
+      Permanently delete <code style="color:var(--blue)">{{ stem }}.j2</code>? This cannot be undone.
+    </p>
+    <div class="d-flex gap-2 justify-content-end">
+      <button class="btn btn-sm btn-outline-secondary"
+              onclick="document.getElementById('delete-modal').style.display='none'">
+        Cancel
+      </button>
+      <form method="post" action="{% url 'provisioning:file_template_delete' stem=stem %}">
+        {% csrf_token %}
+        <button type="submit" class="btn btn-sm btn-danger">
+          <i class="bi bi-trash me-1"></i>Delete
+        </button>
+      </form>
+    </div>
+  </div>
+</div>
+{% endif %}
+
+{% endblock %}
+
+{% block extra_js %}
+<script>
+function copyContent() {
+  const text = document.getElementById('template-content').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById('copy-btn');
+    btn.innerHTML = '<i class="bi bi-check2 me-1"></i>Copied';
+    setTimeout(() => { btn.innerHTML = '<i class="bi bi-clipboard me-1"></i>Copy'; }, 2000);
+  });
+}
+</script>
+{% endblock %}

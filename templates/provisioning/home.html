@@ -58,10 +58,16 @@
         <span class="fw-medium">
           <i class="bi bi-file-earmark-code me-2" style="color:var(--blue)"></i>Template Library
         </span>
-        <a href="/admin/provisioning/provisioningtemplate/add/"
-           class="btn btn-sm btn-outline-secondary" style="font-size:.75rem">
-          <i class="bi bi-plus-lg me-1"></i>New DB Template
-        </a>
+        <div class="d-flex gap-1">
+          <a href="{% url 'provisioning:file_template_list' %}"
+             class="btn btn-sm btn-outline-secondary" style="font-size:.75rem">
+            <i class="bi bi-folder2-open me-1"></i>Manage .j2
+          </a>
+          <a href="/admin/provisioning/provisioningtemplate/add/"
+             class="btn btn-sm btn-outline-secondary" style="font-size:.75rem">
+            <i class="bi bi-plus-lg me-1"></i>New DB Template
+          </a>
+        </div>
       </div>
       <div class="card-body p-0">
 
@@ -76,15 +82,23 @@
           <li class="list-group-item d-flex justify-content-between align-items-center"
               style="background:transparent;border-color:var(--border);padding:.5rem .75rem">
             <div>
-              <code style="color:var(--blue);font-size:.8rem">{{ t.name }}</code>
-              {% if t.device_type %}
-              <span class="badge bg-secondary ms-2" style="font-size:.65rem">{{ t.device_type }}</span>
+              <a href="{% url 'provisioning:file_template_detail' stem=t.stem %}"
+                 class="text-decoration-none">
+                <code style="color:var(--blue);font-size:.8rem">{{ t.name }}</code>
+              </a>
+            </div>
+            <div class="d-flex gap-1">
+              <a href="{% url 'provisioning:push_config' %}?template={{ t.name }}"
+                 class="btn btn-sm btn-outline-primary" style="font-size:.7rem;padding:.2rem .55rem">
+                Use
+              </a>
+              {% if request.user.is_engineer %}
+              <a href="{% url 'provisioning:file_template_edit' stem=t.stem %}"
+                 class="btn btn-sm btn-outline-secondary" style="font-size:.7rem;padding:.2rem .55rem">
+                Edit
+              </a>
               {% endif %}
             </div>
-            <a href="{% url 'provisioning:push_config' %}?template={{ t.name }}"
-               class="btn btn-sm btn-outline-primary" style="font-size:.7rem;padding:.2rem .55rem">
-              Use
-            </a>
           </li>
           {% endif %}{% endfor %}
         </ul>

@@ -4,217 +4,160 @@
 
 {% block extra_css %}
 <style>
-  .alert-row-critical { border-left: 3px solid var(--red); }
-  .alert-row-warning  { border-left: 3px solid var(--amber); }
-  .alert-row-info     { border-left: 3px solid var(--blue); }
-  .sev-critical { color: var(--red);   font-weight: 700; }
-  .sev-warning  { color: var(--amber); font-weight: 600; }
-  .sev-info     { color: var(--blue);  font-weight: 600; }
-  .grafana-card {
-    background: var(--surface);
-    border: 1px solid var(--border);
-    border-radius: .5rem;
-    padding: 1.25rem;
-    text-decoration: none;
-    color: var(--fg);
+#grafana-frame {
+    width: 100%;
+    height: calc(100vh - 295px);
+    min-height: 560px;
+    border: none;
+    border-radius: 0 0 10px 10px;
+    background: #0d1117;
     display: block;
-    transition: border-color .15s, background .15s;
-  }
-  .grafana-card:hover {
-    border-color: var(--blue);
-    background: rgba(59,130,246,.06);
-    color: var(--fg);
-  }
+}
+.alert-sev-critical { color: var(--red);   font-weight: 700; }
+.alert-sev-warning  { color: var(--amber); font-weight: 600; }
+.alert-sev-info     { color: var(--blue);  font-weight: 600; }
 </style>
 {% endblock %}
 
 {% block content %}
-<div class="d-flex justify-content-between align-items-center mb-4">
-  <div>
-    <h1 class="h3 mb-1 fw-semibold">
-      <i class="bi bi-activity me-2" style="color:var(--blue)"></i>Monitoring
-    </h1>
-    <p class="text-secondary mb-0">Prometheus · SNMP Exporter · Grafana · AlertManager</p>
-  </div>
-  <div class="d-flex gap-2">
-    <a href="{% url 'monitoring:alerts' %}" class="btn btn-outline-secondary btn-sm">
-      <i class="bi bi-bell me-1"></i>All Alerts
-    </a>
-    <a href="{% url 'monitoring:dashboards' %}" class="btn btn-primary btn-sm">
-      <i class="bi bi-bar-chart-line me-1"></i>Grafana
-    </a>
-  </div>
+
+<!-- ─── Header ─────────────────────────────────────────────────────────────── -->
+<div class="page-header d-flex align-items-start justify-content-between flex-wrap gap-3">
+    <div>
+        <h1><i class="bi bi-activity me-2" style="color:var(--blue)"></i>Monitoring</h1>
+        <p>Live network metrics · Prometheus · SNMP · Grafana</p>
+    </div>
+    <div class="d-flex gap-2 flex-wrap">
+        <a href="{% url 'monitoring:alerts' %}" class="btn-ghost">
+            <i class="bi bi-bell"></i> Alerts
+            {% if alert_stats.unacked > 0 %}
+            <span class="nav-badge" style="background:var(--red)">{{ alert_stats.unacked }}</span>
+            {% endif %}
+        </a>
+        <a href="{{ grafana_url }}" target="_blank" rel="noopener" class="btn-ghost">
+            <i class="bi bi-box-arrow-up-right"></i> Open Grafana
+        </a>
+    </div>
 </div>
 
-<!-- Stats -->
-<div class="row g-3 mb-4">
-  <div class="col-6 col-xl-3">
-    <div class="stat-card {% if alert_stats.total > 0 %}border-top-red{% else %}border-top-green{% endif %}">
-      <div class="stat-label">Active Alerts</div>
-      <div class="stat-value {% if alert_stats.total > 0 %}text-danger{% else %}text-success{% endif %}">
-        {{ alert_stats.total }}
-      </div>
+<!-- ─── Stats row ──────────────────────────────────────────────────────────── -->
+<div class="row g-3 mb-3">
+    <div class="col-6 col-md-3">
+        <div class="stat-card {% if alert_stats.total > 0 %}stat-red{% else %}stat-green{% endif %}">
+            <div class="stat-icon"><i class="bi bi-bell-fill"></i></div>
+            <div class="stat-body">
+                <div class="stat-value">{{ alert_stats.total }}</div>
+                <div class="stat-label">Active Alerts</div>
+            </div>
+        </div>
     </div>
-  </div>
-  <div class="col-6 col-xl-3">
-    <div class="stat-card {% if alert_stats.critical > 0 %}border-top-red{% else %}border-top-green{% endif %}">
-      <div class="stat-label">Critical</div>
-      <div class="stat-value {% if alert_stats.critical > 0 %}text-danger{% else %}text-success{% endif %}">
-        {{ alert_stats.critical }}
-      </div>
+    <div class="col-6 col-md-3">
+        <div class="stat-card {% if alert_stats.critical > 0 %}stat-red{% else %}stat-green{% endif %}">
+            <div class="stat-icon"><i class="bi bi-exclamation-triangle-fill"></i></div>
+            <div class="stat-body">
+                <div class="stat-value">{{ alert_stats.critical }}</div>
+                <div class="stat-label">Critical</div>
+            </div>
+        </div>
     </div>
-  </div>
-  <div class="col-6 col-xl-3">
-    <div class="stat-card border-top-green">
-      <div class="stat-label">Devices Up</div>
-      <div class="stat-value text-success">{{ device_stats.up }}</div>
-      <div class="text-secondary" style="font-size:.75rem">of {{ device_stats.total }} total</div>
+    <div class="col-6 col-md-3">
+        <div class="stat-card stat-green">
+            <div class="stat-icon"><i class="bi bi-check-circle-fill"></i></div>
+            <div class="stat-body">
+                <div class="stat-value">{{ device_stats.up }}</div>
+                <div class="stat-label">Devices Up</div>
+            </div>
+        </div>
     </div>
-  </div>
-  <div class="col-6 col-xl-3">
-    <div class="stat-card {% if device_stats.down > 0 %}border-top-red{% else %}border-top-green{% endif %}">
-      <div class="stat-label">Devices Down</div>
-      <div class="stat-value {% if device_stats.down > 0 %}text-danger{% else %}text-secondary{% endif %}">
-        {{ device_stats.down }}
-      </div>
+    <div class="col-6 col-md-3">
+        <div class="stat-card {% if device_stats.down > 0 %}stat-red{% else %}stat-green{% endif %}">
+            <div class="stat-icon"><i class="bi bi-x-circle-fill"></i></div>
+            <div class="stat-body">
+                <div class="stat-value">{{ device_stats.down }}</div>
+                <div class="stat-label">Devices Down</div>
+            </div>
+        </div>
     </div>
-  </div>
 </div>
 
-<div class="row g-4">
-
-  <!-- Active alerts -->
-  <div class="col-lg-8">
-    <div class="card" style="background:var(--surface);border:1px solid var(--border)">
-      <div class="card-header d-flex justify-content-between align-items-center"
-           style="background:transparent;border-bottom:1px solid var(--border)">
-        <span>
-          <i class="bi bi-bell-fill me-2" style="color:var(--red)"></i>
-          <span class="fw-medium">Active Alerts</span>
-          {% if alert_stats.unacked > 0 %}
-          <span class="badge bg-danger ms-2">{{ alert_stats.unacked }} unacked</span>
-          {% endif %}
+<!-- ─── Grafana dashboard embed ────────────────────────────────────────────── -->
+<div class="card mb-3">
+    <div class="card-header d-flex align-items-center justify-content-between">
+        <span class="card-header-title">
+            <i class="bi bi-bar-chart-line" style="color:var(--amber)"></i>
+            Network Overview
         </span>
-        <a href="{% url 'monitoring:alerts' %}" class="btn btn-sm btn-outline-secondary"
-           style="font-size:.75rem">View All</a>
-      </div>
-      <div class="card-body p-0">
-        {% if recent_alerts %}
-        <div class="table-responsive">
-          <table class="table mb-0 table-sm" style="color:var(--fg)">
+        <div class="d-flex gap-2 align-items-center">
+            <span id="grafana-status" style="font-size:11px;color:var(--text-muted)">
+                <i class="bi bi-circle-fill" style="font-size:7px"></i> Connecting…
+            </span>
+            <a href="{{ grafana_url }}/d/netops-overview/network-overview"
+               target="_blank" rel="noopener"
+               class="btn-ghost" style="padding:4px 10px;font-size:12px">
+                <i class="bi bi-arrows-fullscreen"></i> Full screen
+            </a>
+        </div>
+    </div>
+    <iframe id="grafana-frame"
+            src="{{ grafana_url }}/d/netops-overview/network-overview?kiosk=tv&theme=dark&refresh=30s"
+            title="Network Overview Dashboard"
+            allow="fullscreen">
+    </iframe>
+</div>
+
+<!-- ─── Active alerts (only when firing) ──────────────────────────────────── -->
+{% if recent_alerts %}
+<div class="card">
+    <div class="card-header">
+        <span class="card-header-title" style="color:var(--red)">
+            <i class="bi bi-bell-fill"></i> Firing Alerts
+        </span>
+        <a href="{% url 'monitoring:alerts' %}" class="btn-ghost" style="padding:4px 12px;font-size:12px">
+            View all <i class="bi bi-arrow-right"></i>
+        </a>
+    </div>
+    <div style="overflow-x:auto">
+        <table class="table-dark-custom">
             <thead>
-              <tr style="border-bottom:1px solid var(--border)">
-                <th class="px-3 py-2 text-secondary" style="font-size:.75rem">Severity</th>
-                <th class="px-3 py-2 text-secondary" style="font-size:.75rem">Alert</th>
-                <th class="px-3 py-2 text-secondary" style="font-size:.75rem">Instance</th>
-                <th class="px-3 py-2 text-secondary" style="font-size:.75rem">Site</th>
-                <th class="px-3 py-2 text-secondary" style="font-size:.75rem">Since</th>
-              </tr>
+                <tr>
+                    <th>Severity</th>
+                    <th>Alert</th>
+                    <th>Instance</th>
+                    <th>Site</th>
+                    <th>Since</th>
+                </tr>
             </thead>
             <tbody>
-              {% for alert in recent_alerts %}
-              <tr class="alert-row-{{ alert.severity }}" style="border-bottom:1px solid var(--border)">
-                <td class="px-3 py-2">
-                  <span class="sev-{{ alert.severity }}">
-                    {% if alert.severity == 'critical' %}🔴{% elif alert.severity == 'warning' %}🟡{% else %}🔵{% endif %}
-                    {{ alert.severity|upper }}
-                  </span>
-                </td>
-                <td class="px-3 py-2 fw-medium" style="font-size:.88rem">{{ alert.alertname }}</td>
-                <td class="px-3 py-2 text-secondary" style="font-size:.82rem">{{ alert.instance }}</td>
-                <td class="px-3 py-2">
-                  <span class="badge bg-secondary" style="font-size:.7rem">{{ alert.site|capfirst }}</span>
-                </td>
-                <td class="px-3 py-2 text-secondary" style="font-size:.78rem"
-                    title="{{ alert.starts_at|default:alert.received_at }}">
-                  {{ alert.starts_at|default:alert.received_at|timesince }} ago
-                </td>
-              </tr>
-              {% endfor %}
+                {% for alert in recent_alerts %}
+                <tr>
+                    <td>
+                        <span class="alert-sev-{{ alert.severity }}">
+                            {% if alert.severity == 'critical' %}◉{% elif alert.severity == 'warning' %}◎{% else %}○{% endif %}
+                            {{ alert.severity|upper }}
+                        </span>
+                    </td>
+                    <td style="font-weight:600;font-size:13px">{{ alert.alertname }}</td>
+                    <td class="mono" style="font-size:12px;color:var(--text-muted)">{{ alert.instance }}</td>
+                    <td>
+                        <span class="badge-status" style="font-size:11px">{{ alert.site|capfirst }}</span>
+                    </td>
+                    <td style="font-size:12px;color:var(--text-muted)"
+                        title="{{ alert.starts_at|default:alert.received_at }}">
+                        {{ alert.starts_at|default:alert.received_at|timesince }} ago
+                    </td>
+                </tr>
+                {% endfor %}
             </tbody>
-          </table>
-        </div>
-        {% else %}
-        <div class="text-center py-5 text-secondary">
-          <i class="bi bi-check-circle-fill d-block mb-2" style="font-size:2.5rem;color:var(--green)"></i>
-          No active alerts — all clear.
-        </div>
-        {% endif %}
-      </div>
+        </table>
     </div>
-  </div>
-
-  <!-- Right column -->
-  <div class="col-lg-4 d-flex flex-column gap-3">
-
-    <!-- Devices Down -->
-    <div class="card flex-fill" style="background:var(--surface);border:1px solid var(--border)">
-      <div class="card-header" style="background:transparent;border-bottom:1px solid var(--border)">
-        <i class="bi bi-hdd-rack me-2" style="color:var(--red)"></i>
-        <span class="fw-medium">Devices Down</span>
-      </div>
-      <div class="card-body p-0">
-        {% if devices_down %}
-        <ul class="list-group list-group-flush">
-          {% for dev in devices_down %}
-          <li class="list-group-item d-flex justify-content-between align-items-center"
-              style="background:transparent;border-color:var(--border);padding:.45rem .75rem">
-            <div>
-              <span class="fw-medium" style="font-size:.88rem">{{ dev.hostname }}</span>
-              <span class="text-secondary ms-2" style="font-size:.75rem">{{ dev.management_ip }}</span>
-            </div>
-            <span class="badge"
-                  style="font-size:.65rem;background:{% if dev.site == 'sofia' %}rgba(59,130,246,.2);color:#60a5fa{% elif dev.site == 'burgas' %}rgba(168,85,247,.2);color:#c084fc{% elif dev.site == 'plovdiv' %}rgba(34,197,94,.2);color:#4ade80{% else %}rgba(245,158,11,.2);color:#fbbf24{% endif %}">
-              {{ dev.site|capfirst }}
-            </span>
-          </li>
-          {% endfor %}
-        </ul>
-        {% else %}
-        <p class="text-secondary text-center py-3 mb-0" style="font-size:.85rem">
-          <i class="bi bi-check-circle text-success me-1"></i>All devices reachable.
-        </p>
-        {% endif %}
-      </div>
-    </div>
-
-    <!-- Grafana links -->
-    <div class="card" style="background:var(--surface);border:1px solid var(--border)">
-      <div class="card-header" style="background:transparent;border-bottom:1px solid var(--border)">
-        <i class="bi bi-bar-chart-line me-2" style="color:var(--amber)"></i>
-        <span class="fw-medium">Grafana Dashboards</span>
-      </div>
-      <div class="card-body d-flex flex-column gap-2">
-        <a href="{{ grafana_url }}/d/netops-overview/network-overview"
-           target="_blank" rel="noopener" class="grafana-card">
-          <div class="fw-medium mb-1" style="font-size:.88rem">
-            <i class="bi bi-grid-3x2 me-2 text-blue"></i>Network Overview
-          </div>
-          <div class="text-secondary" style="font-size:.75rem">Device status · traffic · errors</div>
-        </a>
-        <a href="{{ grafana_url }}" target="_blank" rel="noopener" class="grafana-card">
-          <div class="fw-medium mb-1" style="font-size:.88rem">
-            <i class="bi bi-house me-2 text-amber"></i>Grafana Home
-          </div>
-          <div class="text-secondary" style="font-size:.75rem">All dashboards · explore</div>
-        </a>
-        <a href="{{ grafana_url }}/explore" target="_blank" rel="noopener" class="grafana-card">
-          <div class="fw-medium mb-1" style="font-size:.88rem">
-            <i class="bi bi-search me-2 text-purple"></i>Explore (PromQL)
-          </div>
-          <div class="text-secondary" style="font-size:.75rem">Ad-hoc Prometheus queries</div>
-        </a>
-      </div>
-    </div>
-
-  </div>
-
 </div>
+{% endif %}
+
 {% endblock %}
 
 {% block extra_js %}
 <script>
-// Update the sidebar alert count badge
+// Sidebar alert count badge
 fetch('/api/monitoring/alerts/active-summary/')
   .then(r => r.ok ? r.json() : null)
   .then(data => {
@@ -226,5 +169,15 @@ fetch('/api/monitoring/alerts/active-summary/')
     }
   })
   .catch(() => {});
+
+// Grafana iframe status indicator
+const frame  = document.getElementById('grafana-frame');
+const status = document.getElementById('grafana-status');
+if (frame && status) {
+    frame.addEventListener('load', () => {
+        status.innerHTML = '<i class="bi bi-circle-fill" style="font-size:7px;color:var(--green)"></i> Connected';
+        status.style.color = 'var(--green)';
+    });
+}
 </script>
 {% endblock %}

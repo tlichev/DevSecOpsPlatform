@@ -18,7 +18,10 @@ RESEND_COOLDOWN_SECONDS = 60
 
 @ratelimit(key='ip', rate='10/m', method='POST', block=False)
 def login_view(request):
+    logger.debug('login_view: method=%s authenticated=%s', request.method, request.user.is_authenticated)
+
     if request.user.is_authenticated:
+        logger.debug('login_view: already authenticated, redirecting to dashboard')
         return redirect('inventory:dashboard')
 
     if request.method == 'POST':
@@ -28,16 +31,22 @@ def login_view(request):
             )
         username = request.POST.get('username', '').strip()
         password = request.POST.get('password', '')
+        logger.debug('login_view: POST attempt for username=%s', username)
+
         user = authenticate(request, username=username, password=password)
+        logger.debug('login_view: authenticate() returned %s', user)
 
         if user is not None:
+            logger.debug('login_view: user email=%s', repr(user.email))
             if not user.email:
-                # No email on file — skip 2FA and log in directly
+                logger.debug('login_view: no email — skipping 2FA, logging in directly')
                 login(request, user)
                 return redirect(request.GET.get('next', '/'))
 
             # Generate OTP and store pre-auth state in session
+            logger.debug('login_view: generating OTP for user %s', user.pk)
             otp = TwoFactorCode.generate_for(user)
+            logger.debug('login_view: OTP created pk=%s code=%s', otp.pk, otp.code)
 
             request.session['pre_auth_user_id'] = user.pk
             request.session['pre_auth_backend'] = user.backend
@@ -45,12 +54,13 @@ def login_view(request):
             request.session['pre_auth_attempts'] = 0
             request.session['pre_auth_resend_at'] = None
 
-            # Send OTP via Celery (non-blocking)
             from .tasks import send_otp_email
             send_otp_email.apply_async((user.pk, otp.code), queue='default')
+            logger.debug('login_view: OTP email queued, redirecting to verify-otp')
 
             return redirect('accounts:verify_otp')
 
+        logger.debug('login_view: authenticate() failed')
         messages.error(request, 'Invalid username or password.')
 
     return render(request, 'accounts/login.html')

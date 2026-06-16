@@ -5,7 +5,7 @@ import django.db.models.deletion
 class Migration(migrations.Migration):
 
     dependencies = [
-        ('monitoring', '0001_initial'),
+        ('monitoring', '0002_rename_monitoring_a_status_severity_idx_monitoring__status_d7b628_idx_and_more'),
     ]
 
     operations = [

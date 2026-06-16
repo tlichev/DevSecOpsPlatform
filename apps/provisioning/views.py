@@ -5,6 +5,8 @@ from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.core.paginator import Paginator
 from django.db.models import Q
+from django.http import HttpResponse
+from django.utils import timezone
 from jinja2 import Environment, TemplateSyntaxError
 
 from apps.inventory.models import Device
@@ -220,6 +222,38 @@ def file_template_edit(request, stem):
         'stem': stem, 'content': content, 'mode': 'edit',
         'template_vars': _TEMPLATE_VARS,
     })
+
+
+@login_required
+def pull_config_download_view(request, task_id):
+    """Serve the completed running-config pull as a .txt file download."""
+    from celery.result import AsyncResult
+    result = AsyncResult(task_id)
+
+    if not result.ready():
+        messages.error(request, 'Config pull is not complete yet — please wait.')
+        return redirect(request.META.get('HTTP_REFERER', '/'))
+
+    data = result.result
+    if isinstance(data, Exception) or not isinstance(data, dict):
+        messages.error(request, f'Config pull failed: {data}')
+        return redirect(request.META.get('HTTP_REFERER', '/'))
+
+    if 'error' in data:
+        messages.error(request, f'Config pull failed: {data["error"]}')
+        return redirect(request.META.get('HTTP_REFERER', '/'))
+
+    config_text = data.get('config', '')
+    hostname    = data.get('hostname', 'device')
+    site        = data.get('site', '')
+    timestamp   = data.get('timestamp', timezone.now().strftime('%Y-%m-%d_%H-%M'))
+
+    prefix   = f'{site}_' if site else ''
+    filename = f'{prefix}{hostname}_running-config_{timestamp}.txt'
+
+    response = HttpResponse(config_text, content_type='text/plain; charset=utf-8')
+    response['Content-Disposition'] = f'attachment; filename="{filename}"'
+    return response
 
 
 @_engineer_required

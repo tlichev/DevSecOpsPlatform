@@ -15,7 +15,7 @@ from .serializers import (
     PushConfigSerializer,
 )
 from .template_engine import list_all_templates, render_template
-from .tasks import push_config_to_devices
+from .tasks import push_config_to_devices, pull_running_config
 
 logger = logging.getLogger(__name__)
 
@@ -121,6 +121,31 @@ def push_config_view(request):
         'template':     d['template_name'],
         'dry_run':      d.get('dry_run', False),
         'status':       'queued',
+    }, status=status.HTTP_202_ACCEPTED)
+
+
+@api_view(['POST'])
+@pc([IsAuthenticated])
+def pull_config_trigger_view(request):
+    """POST /api/provisioning/pull-config/ — queue a running-config pull for one device."""
+    if not (request.user.is_engineer() or request.user.is_superuser):
+        return Response({'error': 'Engineer role required.'}, status=status.HTTP_403_FORBIDDEN)
+
+    device_id = request.data.get('device_id')
+    if not device_id:
+        return Response({'error': 'device_id is required.'}, status=status.HTTP_400_BAD_REQUEST)
+
+    try:
+        from apps.inventory.models import Device
+        device = Device.objects.get(pk=device_id)
+    except Device.DoesNotExist:
+        return Response({'error': 'Device not found.'}, status=status.HTTP_404_NOT_FOUND)
+
+    result = pull_running_config.apply_async((device_id, request.user.pk), queue='provisioning')
+    return Response({
+        'task_id': result.id,
+        'device':  device.hostname,
+        'status':  'queued',
     }, status=status.HTTP_202_ACCEPTED)
 
 

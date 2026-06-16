@@ -6,6 +6,7 @@ from .api import (
     AuditLogViewSet,
     render_preview_view,
     push_config_view,
+    pull_config_trigger_view,
     task_status_view,
 )
 
@@ -29,9 +30,13 @@ urlpatterns = [
     path('file-templates/<str:stem>/edit/',   views.file_template_edit,   name='file_template_edit'),
     path('file-templates/<str:stem>/delete/', views.file_template_delete, name='file_template_delete'),
 
+    # Pull running config
+    path('pull-config/<str:task_id>/download/', views.pull_config_download_view, name='pull_config_download'),
+
     # REST API (also reachable at /api/provisioning/ via api/urls.py)
     path('api/',                          include(router.urls)),
-    path('api/render/',                   render_preview_view, name='api-render'),
-    path('api/push/',                     push_config_view,    name='api-push'),
-    path('api/task/<str:task_id>/',       task_status_view,    name='api-task-status'),
+    path('api/render/',                   render_preview_view,      name='api-render'),
+    path('api/push/',                     push_config_view,         name='api-push'),
+    path('api/pull-config/',              pull_config_trigger_view, name='api-pull-config'),
+    path('api/task/<str:task_id>/',       task_status_view,         name='api-task-status'),
 ]

@@ -149,6 +149,76 @@ def push_config_to_devices(device_ids: list[int], template_name: str,
     }
 
 
+# ── Pull running config ────────────────────────────────────────────────────────
+@shared_task(bind=True, name='provisioning.pull_running_config', queue='provisioning', max_retries=1)
+def pull_running_config(self, device_id: int, user_id: int | None = None) -> dict:
+    """SSH into a device, fetch running-config, write an AuditLog entry."""
+    from apps.inventory.models import Device
+    from .models import AuditLog
+
+    try:
+        device = Device.objects.get(pk=device_id)
+    except Device.DoesNotExist:
+        return {'error': 'Device not found', 'device_id': device_id}
+
+    user = None
+    if user_id:
+        try:
+            from django.contrib.auth import get_user_model
+            user = get_user_model().objects.get(pk=user_id)
+        except Exception:
+            pass
+
+    start = time.perf_counter()
+    try:
+        from netmiko import ConnectHandler, NetmikoAuthenticationException
+
+        with ConnectHandler(**device.get_netmiko_params()) as conn:
+            output = conn.send_command('show running-config', read_timeout=60)
+
+        duration = time.perf_counter() - start
+        device.mark_seen()
+
+        AuditLog.objects.create(
+            device=device, user=user,
+            template_name='running-config',
+            action='Pull running-config',
+            status=AuditLog.STATUS_SUCCESS,
+            config_sent=output,
+            execution_time=duration,
+            task_id=self.request.id or '',
+        )
+
+        return {
+            'config':    output,
+            'hostname':  device.hostname,
+            'site':      device.site,
+            'timestamp': timezone.now().strftime('%Y-%m-%d_%H-%M'),
+        }
+
+    except Exception as exc:
+        duration = time.perf_counter() - start
+        logger.error('pull_running_config failed for %s: %s', device.hostname, exc)
+
+        AuditLog.objects.create(
+            device=device, user=user,
+            template_name='running-config',
+            action='Pull running-config',
+            status=AuditLog.STATUS_FAILED,
+            error_message=str(exc),
+            execution_time=duration,
+            task_id=self.request.id or '',
+        )
+
+        from netmiko import NetmikoAuthenticationException
+        if isinstance(exc, NetmikoAuthenticationException):
+            return {'error': str(exc), 'device': device.hostname}
+        try:
+            raise self.retry(exc=exc)
+        except self.MaxRetriesExceededError:
+            return {'error': str(exc), 'device': device.hostname}
+
+
 # ── Render preview (no push) ───────────────────────────────────────────────────
 @shared_task(name='provisioning.render_preview', queue='default')
 def render_preview(device_id: int, template_name: str,

@@ -45,6 +45,12 @@
             <i class="bi bi-layers-fill"></i> Provision
         </a>
         {% if request.user.is_engineer %}
+        <button class="btn-ghost" id="btn-pull-config" data-device-id="{{ device.pk }}"
+                title="Pull running-config and download as .txt">
+            <i class="bi bi-download" id="pull-icon"></i> Pull Config
+        </button>
+        {% endif %}
+        {% if request.user.is_engineer %}
         <a href="{% url 'inventory:device_edit' device.pk %}" class="btn-ghost">
             <i class="bi bi-pencil"></i> Edit
         </a>
@@ -190,6 +196,12 @@
                    class="btn-ghost w-100 justify-content-start">
                     <i class="bi bi-file-diff"></i> Check config drift
                 </a>
+                {% if request.user.is_engineer %}
+                <button class="btn-ghost w-100 justify-content-start" id="btn-pull-config-qa"
+                        data-device-id="{{ device.pk }}">
+                    <i class="bi bi-download" id="pull-icon-qa"></i> Pull running config (.txt)
+                </button>
+                {% endif %}
             </div>
         </div>
 
@@ -329,6 +341,76 @@ if (deleteModal) {
         if (e.target === deleteModal) deleteModal.style.display = 'none';
     });
 }
+
+// ── Pull running config ───────────────────────────────────────────────────
+function pullRunningConfig(deviceId, iconEl, btnEl) {
+    if (iconEl) { iconEl.className = 'bi bi-arrow-repeat spin'; }
+    if (btnEl)  { btnEl.disabled = true; }
+    showDevToast('Connecting to device…', 'info');
+
+    fetch('/provisioning/api/pull-config/', {
+        method: 'POST',
+        headers: {
+            'X-CSRFToken': getCookie('csrftoken'),
+            'Content-Type': 'application/json',
+        },
+        credentials: 'same-origin',
+        body: JSON.stringify({ device_id: deviceId }),
+    })
+    .then(r => r.json())
+    .then(data => {
+        if (data.error) throw new Error(data.error);
+        showDevToast('Pulling running-config — please wait…', 'info');
+        pollForDownload(data.task_id, iconEl, btnEl);
+    })
+    .catch(err => {
+        showDevToast('Pull failed: ' + err.message, 'error');
+        resetPullBtn(iconEl, btnEl);
+    });
+}
+
+function pollForDownload(taskId, iconEl, btnEl, attempt = 0) {
+    const MAX = 15;   // 15 × 2s = 30s timeout
+    if (attempt >= MAX) {
+        showDevToast('Timed out waiting for device response.', 'error');
+        resetPullBtn(iconEl, btnEl);
+        return;
+    }
+    setTimeout(() => {
+        fetch('/provisioning/api/task/' + taskId + '/', { credentials: 'same-origin' })
+        .then(r => r.json())
+        .then(data => {
+            if (data.state === 'SUCCESS') {
+                if (data.result && data.result.error) {
+                    showDevToast('Pull failed: ' + data.result.error, 'error');
+                    resetPullBtn(iconEl, btnEl);
+                } else {
+                    showDevToast('Config pulled — downloading…', 'success');
+                    window.location.href = '/provisioning/pull-config/' + taskId + '/download/';
+                    resetPullBtn(iconEl, btnEl);
+                }
+            } else if (data.state === 'FAILURE') {
+                showDevToast('Task failed on the worker.', 'error');
+                resetPullBtn(iconEl, btnEl);
+            } else {
+                pollForDownload(taskId, iconEl, btnEl, attempt + 1);
+            }
+        })
+        .catch(() => pollForDownload(taskId, iconEl, btnEl, attempt + 1));
+    }, 2000);
+}
+
+function resetPullBtn(iconEl, btnEl) {
+    if (iconEl) iconEl.className = 'bi bi-download';
+    if (btnEl)  btnEl.disabled = false;
+}
+
+document.getElementById('btn-pull-config')?.addEventListener('click', function() {
+    pullRunningConfig(this.dataset.deviceId, document.getElementById('pull-icon'), this);
+});
+document.getElementById('btn-pull-config-qa')?.addEventListener('click', function() {
+    pullRunningConfig(this.dataset.deviceId, document.getElementById('pull-icon-qa'), this);
+});
 
 function getCookie(n) {
     const v = document.cookie.match('(^|;) ?' + n + '=([^;]*)(;|$)');

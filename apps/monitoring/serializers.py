@@ -28,26 +28,34 @@ class AlertSerializer(serializers.ModelSerializer):
 
 # ── AlertManager webhook payload structure ────────────────────────────────────
 
+class _NullableStrField(serializers.CharField):
+    """CharField that coerces None to empty string instead of rejecting it."""
+    def to_internal_value(self, data):
+        if data is None:
+            return ''
+        return super().to_internal_value(data)
+
+
 class _AlertManagerAlertSerializer(serializers.Serializer):
-    status      = serializers.CharField()
-    labels      = serializers.DictField(child=serializers.CharField(allow_blank=True))
-    annotations = serializers.DictField(child=serializers.CharField(allow_blank=True), required=False, default=dict)
-    startsAt    = serializers.DateTimeField()
-    endsAt      = serializers.DateTimeField(required=False, allow_null=True)
-    fingerprint = serializers.CharField(max_length=64)
+    status       = serializers.CharField()
+    labels       = serializers.DictField(child=_NullableStrField(allow_blank=True), default=dict)
+    annotations  = serializers.DictField(child=_NullableStrField(allow_blank=True), required=False, default=dict)
+    startsAt     = serializers.DateTimeField(required=False, allow_null=True)
+    endsAt       = serializers.DateTimeField(required=False, allow_null=True)
+    fingerprint  = serializers.CharField(max_length=64)
     generatorURL = serializers.CharField(required=False, allow_blank=True, default='')
 
 
 class AlertManagerWebhookSerializer(serializers.Serializer):
-    version      = serializers.CharField(default='4')
-    groupKey     = serializers.CharField(required=False, allow_blank=True, default='')
-    status       = serializers.CharField()
-    receiver     = serializers.CharField()
-    groupLabels  = serializers.DictField(child=serializers.CharField(allow_blank=True), default=dict)
-    commonLabels = serializers.DictField(child=serializers.CharField(allow_blank=True), default=dict)
-    commonAnnotations = serializers.DictField(child=serializers.CharField(allow_blank=True), default=dict)
-    externalURL  = serializers.CharField(required=False, allow_blank=True, default='')
-    alerts       = _AlertManagerAlertSerializer(many=True)
+    version           = serializers.CharField(default='4')
+    groupKey          = serializers.CharField(required=False, allow_blank=True, default='')
+    status            = serializers.CharField()
+    receiver          = serializers.CharField(required=False, allow_blank=True, default='')
+    groupLabels       = serializers.DictField(child=_NullableStrField(allow_blank=True), default=dict)
+    commonLabels      = serializers.DictField(child=_NullableStrField(allow_blank=True), default=dict)
+    commonAnnotations = serializers.DictField(child=_NullableStrField(allow_blank=True), default=dict)
+    externalURL       = serializers.CharField(required=False, allow_blank=True, default='')
+    alerts            = _AlertManagerAlertSerializer(many=True)
 
 
 class AcknowledgeSerializer(serializers.Serializer):

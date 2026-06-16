@@ -81,24 +81,40 @@ def alerts_webhook(request):
             logger.warning('alerts_webhook: alert without fingerprint, skipping')
             continue
 
+        # Convert datetime objects to ISO strings so raw_payload is JSON-safe
+        starts_at_dt = raw_alert.get('startsAt')
+        ends_at_dt   = raw_alert.get('endsAt')
+        safe_payload = {
+            k: (v.isoformat() if hasattr(v, 'isoformat') else v)
+            for k, v in raw_alert.items()
+        }
+
+        severity = labels.get('severity', 'warning')
+        if severity not in ('critical', 'warning', 'info'):
+            severity = 'warning'
+
         defaults = {
             'alertname':   labels.get('alertname', ''),
             'instance':    labels.get('instance', ''),
             'site':        labels.get('site', ''),
-            'severity':    labels.get('severity', 'warning'),
-            'status':      alert_status,
+            'severity':    severity,
+            'status':      alert_status if alert_status in ('firing', 'resolved') else 'firing',
             'summary':     annotations.get('summary', ''),
             'description': annotations.get('description', ''),
-            'raw_labels':  labels,
-            'raw_payload': dict(raw_alert),
-            'starts_at':   raw_alert.get('startsAt'),
-            'ends_at':     raw_alert.get('endsAt') if alert_status == 'resolved' else None,
+            'raw_labels':  dict(labels),
+            'raw_payload': safe_payload,
+            'starts_at':   starts_at_dt,
+            'ends_at':     ends_at_dt if alert_status == 'resolved' else None,
         }
 
-        alert, created = Alert.objects.update_or_create(
-            fingerprint=fingerprint,
-            defaults=defaults,
-        )
+        try:
+            alert, created = Alert.objects.update_or_create(
+                fingerprint=fingerprint,
+                defaults=defaults,
+            )
+        except Exception as exc:
+            logger.exception('alerts_webhook: DB error for fingerprint %s: %s', fingerprint, exc)
+            continue
 
         if created:
             created_count += 1
@@ -107,7 +123,6 @@ def alerts_webhook(request):
                 labels.get('severity', '?'), labels.get('alertname', '?'),
                 labels.get('instance', '?'),
             )
-            # Send email for newly firing alerts
             if alert_status == 'firing':
                 from .tasks import send_alert_email
                 send_alert_email.apply_async(
@@ -117,13 +132,11 @@ def alerts_webhook(request):
             resolved_count += 1
             logger.info('alerts_webhook: RESOLVED %s — %s',
                         labels.get('alertname', '?'), labels.get('instance', '?'))
-            # Send resolved notification
             from .tasks import send_alert_email
             send_alert_email.apply_async(
                 (alert.pk, 'resolved'), queue='monitoring', countdown=5,
             )
 
-        # Immediately update device status for DeviceDown alerts
         if labels.get('alertname') == 'DeviceDown':
             _handle_device_down(labels.get('instance', ''), alert_status)
 

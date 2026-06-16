@@ -26,8 +26,12 @@ CACHES = {
 # ── CORS (allow all in dev) ───────────────────────────────────────────────────
 CORS_ALLOW_ALL_ORIGINS = True
 
-# ── Email (console in dev) ────────────────────────────────────────────────────
-EMAIL_BACKEND = 'django.core.mail.backends.console.EmailBackend'
+# ── Email — use SMTP if credentials are set, otherwise fall back to console ───
+EMAIL_BACKEND = (
+    'django.core.mail.backends.smtp.EmailBackend'
+    if os.environ.get('EMAIL_HOST_USER')
+    else 'django.core.mail.backends.console.EmailBackend'
+)
 
 # ── Django extensions / debug ─────────────────────────────────────────────────
 INTERNAL_IPS = ['127.0.0.1', '0.0.0.0']

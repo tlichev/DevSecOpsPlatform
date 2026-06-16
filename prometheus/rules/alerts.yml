@@ -1,44 +1,120 @@
 groups:
-  - name: network_device_alerts
+
+  # ── Network device availability ──────────────────────────────────────────────
+  - name: device_availability
     interval: 30s
     rules:
+
       - alert: DeviceDown
         expr: up{job=~"snmp_.*"} == 0
         for: 2m
         labels:
           severity: critical
         annotations:
-          summary: "Network device {{ $labels.instance }} is down"
-          description: "SNMP target {{ $labels.instance }} (site: {{ $labels.site }}) has been unreachable for more than 2 minutes."
+          summary: "Device unreachable: {{ $labels.instance }}"
+          description: >
+            SNMP target {{ $labels.instance }} (site: {{ $labels.site }},
+            role: {{ $labels.role }}) has been unreachable for more than 2 minutes.
+            All monitoring data for this device is stale.
 
+  # ── Interface status ─────────────────────────────────────────────────────────
+  - name: interface_status
+    interval: 30s
+    rules:
+
+      # ifOperStatus == 2 means "down" in SNMP MIB-II
+      # Exclude null/loopback/Blueprint interfaces (same filter as the dashboard)
       - alert: InterfaceDown
-        expr: ifOperStatus{ifOperStatus="2"} == 1
-        for: 1m
+        expr: >
+          ifOperStatus{ifName!~"Bl.*|Nu.*|Lo.*"} == 2
+        for: 2m
         labels:
           severity: warning
         annotations:
-          summary: "Interface down on {{ $labels.instance }}"
-          description: "Interface {{ $labels.ifDescr }} on {{ $labels.instance }} is operationally down."
+          summary: "Interface down: {{ $labels.ifDescr }} on {{ $labels.instance }}"
+          description: >
+            Interface {{ $labels.ifName }} ({{ $labels.ifDescr }}) on
+            {{ $labels.instance }} has been operationally down for 2+ minutes.
+            ifIndex: {{ $labels.ifIndex }}.
+
+  # ── Interface utilization ─────────────────────────────────────────────────────
+  - name: interface_utilization
+    interval: 60s
+    rules:
+
+      # Matches the "In utilization %" panel formula exactly
+      - alert: HighInboundUtilization
+        expr: >
+          (
+            rate(ifHCInOctets{ifName!~"Bl.*|Nu.*|Lo.*"}[5m]) * 8
+          ) / (
+            ifHighSpeed{ifName!~"Bl.*|Nu.*|Lo.*"} * 1000000
+          ) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High inbound utilization: {{ $labels.ifName }} on {{ $labels.instance }}"
+          description: >
+            Interface {{ $labels.ifName }} ({{ $labels.ifDescr }}) on
+            {{ $labels.instance }} inbound utilization has exceeded 85% for 5 minutes.
+            Current value: {{ $value | printf "%.1f" }}%.
+
+      # Matches the "Out utilization %" panel formula exactly
+      - alert: HighOutboundUtilization
+        expr: >
+          (
+            rate(ifHCOutOctets{ifName!~"Bl.*|Nu.*|Lo.*"}[5m]) * 8
+          ) / (
+            ifHighSpeed{ifName!~"Bl.*|Nu.*|Lo.*"} * 1000000
+          ) * 100 > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High outbound utilization: {{ $labels.ifName }} on {{ $labels.instance }}"
+          description: >
+            Interface {{ $labels.ifName }} ({{ $labels.ifDescr }}) on
+            {{ $labels.instance }} outbound utilization has exceeded 85% for 5 minutes.
+            Current value: {{ $value | printf "%.1f" }}%.
+
+  # ── Interface errors & discards ───────────────────────────────────────────────
+  - name: interface_errors
+    interval: 60s
+    rules:
 
       - alert: HighInterfaceErrors
-        expr: rate(ifInErrors[5m]) > 10 or rate(ifOutErrors[5m]) > 10
+        expr: >
+          rate(ifInErrors{ifName!~"Bl.*|Nu.*|Lo.*"}[5m]) > 10
+          or
+          rate(ifOutErrors{ifName!~"Bl.*|Nu.*|Lo.*"}[5m]) > 10
         for: 5m
         labels:
           severity: warning
         annotations:
-          summary: "High interface errors on {{ $labels.instance }}"
-          description: "Interface {{ $labels.ifDescr }} on {{ $labels.instance }} is experiencing >10 errors/sec."
+          summary: "High error rate: {{ $labels.ifName }} on {{ $labels.instance }}"
+          description: >
+            Interface {{ $labels.ifName }} ({{ $labels.ifDescr }}) on
+            {{ $labels.instance }} is seeing >10 errors/second sustained for 5 minutes.
 
-  - name: system_alerts
-    rules:
-      - alert: HighCPULoad
-        expr: 100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+      - alert: HighInterfaceDiscards
+        expr: >
+          rate(ifInDiscards{ifName!~"Bl.*|Nu.*|Lo.*"}[5m]) > 5
+          or
+          rate(ifOutDiscards{ifName!~"Bl.*|Nu.*|Lo.*"}[5m]) > 5
         for: 5m
         labels:
           severity: warning
         annotations:
-          summary: "High CPU load on {{ $labels.instance }}"
-          description: "CPU load is above 85% for 5+ minutes."
+          summary: "High discard rate: {{ $labels.ifName }} on {{ $labels.instance }}"
+          description: >
+            Interface {{ $labels.ifName }} ({{ $labels.ifDescr }}) on
+            {{ $labels.instance }} is discarding >5 packets/second sustained for 5 minutes.
+            This usually indicates queue congestion or policy drops.
+
+  # ── Platform health ───────────────────────────────────────────────────────────
+  - name: platform_health
+    rules:
 
       - alert: DjangoDown
         expr: up{job="django"} == 0
@@ -46,5 +122,15 @@ groups:
         labels:
           severity: critical
         annotations:
-          summary: "NetOps Django application is down"
-          description: "The Django application has been unreachable for more than 1 minute."
+          summary: "NetOps Platform is unreachable"
+          description: "The Django application (job=django) has been unreachable for 1+ minute."
+
+      - alert: HighCPULoad
+        expr: >
+          100 - (avg by (instance) (rate(node_cpu_seconds_total{mode="idle"}[5m])) * 100) > 85
+        for: 5m
+        labels:
+          severity: warning
+        annotations:
+          summary: "High CPU load on {{ $labels.instance }}"
+          description: "CPU utilization is above 85% on {{ $labels.instance }} for 5+ minutes."

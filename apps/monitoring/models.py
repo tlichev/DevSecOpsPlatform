@@ -77,3 +77,27 @@ class Alert(models.Model):
         self.status  = self.STATUS_RESOLVED
         self.ends_at = timezone.now()
         self.save(update_fields=['status', 'ends_at'])
+
+
+class AlertNotification(models.Model):
+    """Tracks every email sent for an alert to prevent duplicate sends."""
+
+    alert       = models.ForeignKey(Alert, on_delete=models.CASCADE,
+                                    related_name='notifications')
+    recipient   = models.EmailField()
+    alert_state = models.CharField(max_length=20,
+                                   help_text='"firing" or "resolved"')
+    sent_at     = models.DateTimeField(auto_now_add=True)
+    success     = models.BooleanField(default=True)
+    error_msg   = models.TextField(blank=True)
+
+    class Meta:
+        ordering = ['-sent_at']
+        indexes  = [
+            models.Index(fields=['alert', 'alert_state'],
+                         name='mon_notif_alert_state_idx'),
+        ]
+
+    def __str__(self):
+        return (f'[{"OK" if self.success else "FAIL"}] '
+                f'{self.alert.alertname} → {self.recipient} ({self.alert_state})')

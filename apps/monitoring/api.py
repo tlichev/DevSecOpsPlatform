@@ -107,10 +107,21 @@ def alerts_webhook(request):
                 labels.get('severity', '?'), labels.get('alertname', '?'),
                 labels.get('instance', '?'),
             )
+            # Send email for newly firing alerts
+            if alert_status == 'firing':
+                from .tasks import send_alert_email
+                send_alert_email.apply_async(
+                    (alert.pk, 'firing'), queue='monitoring', countdown=5,
+                )
         elif alert_status == 'resolved':
             resolved_count += 1
             logger.info('alerts_webhook: RESOLVED %s — %s',
                         labels.get('alertname', '?'), labels.get('instance', '?'))
+            # Send resolved notification
+            from .tasks import send_alert_email
+            send_alert_email.apply_async(
+                (alert.pk, 'resolved'), queue='monitoring', countdown=5,
+            )
 
         # Immediately update device status for DeviceDown alerts
         if labels.get('alertname') == 'DeviceDown':

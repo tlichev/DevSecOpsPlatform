@@ -210,6 +210,26 @@ CELERY_BEAT_SCHEDULE = {
     },
 }
 
+# ── Email (SMTP) ──────────────────────────────────────────────────────────────
+EMAIL_BACKEND       = 'django.core.mail.backends.smtp.EmailBackend'
+EMAIL_HOST          = os.environ.get('EMAIL_HOST', 'smtp.gmail.com')
+EMAIL_PORT          = int(os.environ.get('EMAIL_PORT', 587))
+EMAIL_USE_TLS       = os.environ.get('EMAIL_USE_TLS', 'True') == 'True'
+EMAIL_HOST_USER     = os.environ.get('EMAIL_HOST_USER', '')
+EMAIL_HOST_PASSWORD = os.environ.get('EMAIL_HOST_PASSWORD', '')
+DEFAULT_FROM_EMAIL  = os.environ.get('DEFAULT_FROM_EMAIL', 'netops-alerts@yourdomain.com')
+SERVER_EMAIL        = DEFAULT_FROM_EMAIL
+
+# Comma-separated list of addresses that receive alert emails
+ALERT_EMAIL_RECIPIENTS = [
+    e.strip()
+    for e in os.environ.get('ALERT_EMAIL_RECIPIENTS', '').split(',')
+    if e.strip()
+]
+
+# Browser-accessible base URL used in email links (no trailing slash)
+PLATFORM_URL = os.environ.get('PLATFORM_URL', 'http://localhost:8000')
+
 # ── External services ─────────────────────────────────────────────────────────
 GRAFANA_URL = os.environ.get('GRAFANA_URL', 'http://grafana:3000')
 # URL accessible from the user's browser (for iframes); differs from internal Docker URL

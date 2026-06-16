@@ -1,10 +1,96 @@
 import logging
 
 from celery import shared_task
+from django.conf import settings
 
 logger = logging.getLogger(__name__)
 
 PROMETHEUS_URL = 'http://prometheus:9090'
+
+
+@shared_task(name='monitoring.send_alert_email', queue='monitoring',
+             autoretry_for=(Exception,), max_retries=3, retry_backoff=60)
+def send_alert_email(alert_id: int, state: str = 'firing'):
+    """
+    Render and send a branded HTML alert email to all configured recipients.
+    Deduplicates: one email per (alert, state, recipient).
+    """
+    from django.core.mail import EmailMultiAlternatives
+    from django.template.loader import render_to_string
+    from .models import Alert, AlertNotification
+
+    recipients = getattr(settings, 'ALERT_EMAIL_RECIPIENTS', [])
+    if not recipients:
+        logger.info('send_alert_email: no recipients configured — skipping')
+        return {'skipped': 'no recipients'}
+
+    try:
+        alert = Alert.objects.get(pk=alert_id)
+    except Alert.DoesNotExist:
+        logger.warning('send_alert_email: alert %s not found', alert_id)
+        return {'error': 'alert not found'}
+
+    platform_url = getattr(settings, 'PLATFORM_URL', 'http://localhost:8000')
+
+    if state == 'resolved':
+        subject = f'[RESOLVED] {alert.alertname} — {alert.instance}'
+    else:
+        subject = f'[{alert.severity.upper()}] {alert.alertname} — {alert.instance}'
+        if alert.site:
+            subject += f' ({alert.site})'
+
+    html_body = render_to_string('emails/alert_notification.html', {
+        'alert':        alert,
+        'state':        state,
+        'platform_url': platform_url,
+    })
+    text_body = (
+        f'{subject}\n\n'
+        f'Device:   {alert.instance}\n'
+        f'Site:     {alert.site or "—"}\n'
+        f'Severity: {alert.severity.upper()}\n'
+        f'Status:   {state}\n\n'
+        f'{alert.description or alert.summary}\n\n'
+        f'View in platform: {platform_url}/monitoring/alerts/\n'
+    )
+
+    sent = failed = skipped = 0
+
+    for recipient in recipients:
+        # Deduplicate: skip if we already sent for this exact (alert, state, recipient)
+        already_sent = AlertNotification.objects.filter(
+            alert=alert, alert_state=state, recipient=recipient, success=True,
+        ).exists()
+        if already_sent:
+            skipped += 1
+            continue
+
+        try:
+            msg = EmailMultiAlternatives(
+                subject=subject,
+                body=text_body,
+                from_email=settings.DEFAULT_FROM_EMAIL,
+                to=[recipient],
+            )
+            msg.attach_alternative(html_body, 'text/html')
+            msg.send()
+
+            AlertNotification.objects.create(
+                alert=alert, recipient=recipient, alert_state=state, success=True,
+            )
+            sent += 1
+            logger.info('send_alert_email: sent to %s (%s / %s)', recipient, alert.alertname, state)
+
+        except Exception as exc:
+            AlertNotification.objects.create(
+                alert=alert, recipient=recipient, alert_state=state,
+                success=False, error_msg=str(exc),
+            )
+            failed += 1
+            logger.error('send_alert_email: failed for %s: %s', recipient, exc)
+            raise  # triggers autoretry
+
+    return {'sent': sent, 'failed': failed, 'skipped': skipped}
 
 
 @shared_task(name='monitoring.sync_alerts', queue='monitoring')

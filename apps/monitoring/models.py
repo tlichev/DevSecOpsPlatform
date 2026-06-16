@@ -1,5 +1,6 @@
 from django.db import models
 from django.conf import settings
+from django.core.serializers.json import DjangoJSONEncoder
 
 
 class Alert(models.Model):
@@ -34,8 +35,8 @@ class Alert(models.Model):
     # ── Content ───────────────────────────────────────────────────────────────
     summary     = models.TextField(blank=True)
     description = models.TextField(blank=True)
-    raw_labels  = models.JSONField(default=dict)
-    raw_payload = models.JSONField(default=dict,
+    raw_labels  = models.JSONField(default=dict, encoder=DjangoJSONEncoder)
+    raw_payload = models.JSONField(default=dict, encoder=DjangoJSONEncoder,
                                    help_text='Full alert payload from AlertManager')
 
     # ── Timestamps ────────────────────────────────────────────────────────────

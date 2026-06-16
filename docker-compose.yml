@@ -1,25 +1,25 @@
 version: '3.9'
-
+ 
 # Management network note:
 # The EVE-NG lab management range (192.168.100.0/24) must be routable from the
 # Docker host. Add a static route on the host pointing 192.168.100.0/24 to the
 # EVE-NG management interface before starting the stack.
 # On Linux: ip route add 192.168.100.0/24 via <eve-ng-mgmt-ip>
-
+ 
 x-django-env: &django-env
   env_file:
     - .env
   environment:
     - DJANGO_SETTINGS_MODULE=config.settings.dev
     - REDIS_URL=redis://redis:6379/0
-
+ 
 x-django-volumes: &django-volumes
   volumes:
     - .:/app                          # bind-mount source — no rebuild needed on code changes
     - db_volume:/app/db               # named volume overlays /app/db (SQLite, persistent)
     - static_volume:/app/staticfiles  # named volume overlays /app/staticfiles
     - media_volume:/app/mediafiles    # named volume overlays /app/mediafiles
-
+ 
 services:
   django:
     build:
@@ -41,7 +41,7 @@ services:
       timeout: 10s
       retries: 3
       start_period: 40s
-
+ 
   celery:
     build:
       context: .
@@ -55,7 +55,7 @@ services:
       - netops
       - mgmt
     restart: unless-stopped
-
+ 
   celery-beat:
     build:
       context: .
@@ -68,7 +68,7 @@ services:
     networks:
       - netops
     restart: unless-stopped
-
+ 
   redis:
     image: redis:7-alpine
     ports:
@@ -81,7 +81,7 @@ services:
       interval: 10s
       timeout: 5s
       retries: 5
-
+ 
   prometheus:
     image: prom/prometheus:v2.50.1
     volumes:
@@ -99,7 +99,7 @@ services:
       - netops
       - mgmt
     restart: unless-stopped
-
+ 
   snmp_exporter:
     image: prom/snmp-exporter:v0.25.0
     volumes:
@@ -110,7 +110,7 @@ services:
       - netops
       - mgmt
     restart: unless-stopped
-
+ 
   node_exporter:
     image: prom/node-exporter:v1.7.0
     ports:
@@ -127,16 +127,16 @@ services:
       - '--path.procfs=/host/proc'
       - '--path.sysfs=/host/sys'
       - '--collector.filesystem.mount-points-exclude=^/(sys|proc|dev|host|etc)($$|/)'
-
+ 
   grafana:
-    image: grafana/grafana:10.3.3
+    image: grafana/grafana:latest
     volumes:
       - grafana_data:/var/lib/grafana
       - ./grafana/dashboards:/etc/grafana/provisioning/dashboards:ro
       - ./grafana/datasources:/etc/grafana/provisioning/datasources:ro
     environment:
       - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_ADMIN_PASSWORD:-admin}
+      - GF_SECURITY_ADMIN_PASSWORD=admin
       - GF_USERS_ALLOW_SIGN_UP=false
       - GF_AUTH_ANONYMOUS_ENABLED=true
       - GF_AUTH_ANONYMOUS_ORG_ROLE=Viewer
@@ -149,7 +149,7 @@ services:
     restart: unless-stopped
     depends_on:
       - prometheus
-
+ 
   alertmanager:
     image: prom/alertmanager:v0.27.0
     volumes:
@@ -163,7 +163,27 @@ services:
     networks:
       - netops
     restart: unless-stopped
-
+ 
+  snmp-exporter1:
+    image: prom/snmp-exporter:v0.30.1
+    container_name: snmp-exporter1
+    restart: unless-stopped
+ 
+    networks:
+      - netops
+      - mgmt
+ 
+ 
+    ports:
+      - "9116:9116"
+ 
+    volumes:
+      - /home/teron/Desktop/student/TU/FINAL/snmp_exporter/snmp.yml:/etc/snmp_exporter/snmp.yml:ro
+ 
+    command:
+      - "--config.file=/etc/snmp_exporter/snmp.yml"
+ 
+ 
 volumes:
   db_volume:
   static_volume:
@@ -171,10 +191,11 @@ volumes:
   prometheus_data:
   grafana_data:
   alertmanager_data:
-
+ 
 networks:
   netops:
     driver: bridge
   mgmt:
     driver: bridge
     # Containers in this network need host routing to reach 192.168.100.0/24
+ 

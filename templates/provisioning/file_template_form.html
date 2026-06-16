@@ -163,7 +163,7 @@ editor.addEventListener('keydown', function(e) {
 
 // Click a variable chip to insert it at cursor
 function insertVariable(varName) {
-  const token = `{{ ${varName} }}`;
+  const token = '{{ ' + varName + ' }}';
   const start = editor.selectionStart;
   const end   = editor.selectionEnd;
   editor.value = editor.selectionStart === editor.selectionEnd

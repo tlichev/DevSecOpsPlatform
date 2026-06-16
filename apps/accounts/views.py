@@ -1,3 +1,5 @@
+import logging
+
 from django.contrib.auth import authenticate, login, logout, get_user_model, update_session_auth_hash
 from django.contrib.auth.decorators import login_required
 from django.shortcuts import render, redirect, get_object_or_404
@@ -10,6 +12,7 @@ from .forms import ProfileUpdateForm, CustomPasswordChangeForm, AdminUserRoleFor
 from .decorators import admin_required
 from .models import TwoFactorCode
 
+logger = logging.getLogger(__name__)
 User = get_user_model()
 
 MAX_OTP_ATTEMPTS = 5

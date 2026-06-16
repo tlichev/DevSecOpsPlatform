@@ -34,6 +34,9 @@ services:
         condition: service_healthy
     networks:
       - netops
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     restart: unless-stopped
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8000/health/"]
@@ -54,6 +57,9 @@ services:
     networks:
       - netops
       - mgmt
+    dns:
+      - 8.8.8.8
+      - 8.8.4.4
     restart: unless-stopped
  
   celery-beat:

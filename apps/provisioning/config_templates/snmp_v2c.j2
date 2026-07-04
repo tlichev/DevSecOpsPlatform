@@ -1,39 +1,7 @@
 ! =============================================================================
-! SNMP v2c Configuration
-! Generated for : {{ hostname }}  ({{ ip_address }})
-! Site          : {{ site_label }}
+! Basic SNMP Configuration
+! Generated for : {{ hostname }} ({{ ip_address }})
 ! =============================================================================
 
-{% set community_ro = snmp_community | default('public') %}
-{% set community_rw = snmp_rw_community | default('private') %}
-{% set mgmt_host   = snmp_manager | default('192.168.100.1') %}
-
-! ── Remove insecure defaults ─────────────────────────────────────────────────
-no snmp-server community public RW
-no snmp-server community private RW
-no snmp-server community public RO
-
-! ── Read-only community (management network only) ─────────────────────────────
-snmp-server community {{ community_ro }} RO MGMT_ACCESS
-snmp-server community {{ community_rw }} RW MGMT_ACCESS
-
-! ── System information ────────────────────────────────────────────────────────
-snmp-server location "{{ site_label }} Site — {{ device_type | replace('_',' ') | title }}"
-snmp-server contact "NetOps Platform <netops@enterprise.local>"
-
-! ── Enable trap categories ────────────────────────────────────────────────────
-snmp-server enable traps snmp authentication linkdown linkup coldstart warmstart
-snmp-server enable traps ospf
-snmp-server enable traps bgp
-snmp-server enable traps config
-snmp-server enable traps syslog
-
-! ── Trap destination ─────────────────────────────────────────────────────────
-snmp-server host {{ mgmt_host }} traps version 2c {{ community_ro }}
-
-! ── SNMPv3 engine (future-proof) ─────────────────────────────────────────────
-! Uncomment and configure when upgrading to SNMPv3:
-! snmp-server group NetOpsROGroup v3 priv
-! snmp-server user netops_monitor NetOpsROGroup v3 auth sha NetOps@Auth2024 priv aes 128 NetOps@Priv2024
-! snmp-server host {{ mgmt_host }} version 3 priv netops_monitor
-!
+! Enable SNMP with public community
+snmp-server community public RO

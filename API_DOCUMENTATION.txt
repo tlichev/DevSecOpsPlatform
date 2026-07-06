@@ -1,0 +1,1488 @@
+DevSecOps Platform — REST API Documentation
+============================================
+Base URL  : http://localhost:8000/api/
+API Docs  : http://localhost:8000/api/docs/      (Swagger UI)
+ReDoc     : http://localhost:8000/api/redoc/
+Schema    : http://localhost:8000/api/schema/    (OpenAPI 3 JSON)
+Health    : http://localhost:8000/health/        (no auth)
+
+All endpoints use JSON (Content-Type: application/json) unless stated
+otherwise. Pagination is page-based: ?page=2&page_size=20.
+
+
+═══════════════════════════════════════════════════════════════════════════════
+AUTHENTICATION
+═══════════════════════════════════════════════════════════════════════════════
+
+The API uses JWT (JSON Web Tokens) via django-rest-framework-simplejwt.
+The access token embeds role and capability flags directly in its claims
+so clients do not need a separate /me/ call to check permissions.
+
+JWT token claims (custom fields added beyond standard sub/iat/exp):
+  username    string   Login username
+  role        string   "admin" | "engineer" | "readonly"
+  is_admin    bool     True if role==admin or is_superuser
+  is_engineer bool     True if role in (admin, engineer) or is_superuser
+  full_name   string   first_name + last_name
+
+Role permission matrix across the entire API:
+  Endpoint type                       readonly   engineer   admin
+  ----------------------------------  ---------  ---------  -----
+  GET (all read endpoints)            YES        YES        YES
+  POST / PUT / PATCH (write)          NO         YES        YES
+  DELETE                              NO         NO         YES
+  Admin-only user management          NO         NO         YES
+  AlertManager webhook (no auth)      --         --         --
+
+───────────────────────────────────────────────────────────────────────────────
+
+POST /api/token/
+  Obtain an access + refresh token pair.
+
+  Request body:
+    {
+      "username": "admin",
+      "password": "secretpassword"
+    }
+
+  Response 200:
+    {
+      "access":  "<JWT access token>",
+      "refresh": "<JWT refresh token>"
+    }
+
+  The access token expires in 8 hours. The refresh token expires in 7 days.
+
+───────────────────────────────────────────────────────────────────────────────
+
+POST /api/token/refresh/
+  Get a new access token using a valid refresh token.
+
+  Request body:
+    { "refresh": "<JWT refresh token>" }
+
+  Response 200:
+    { "access": "<new JWT access token>" }
+
+───────────────────────────────────────────────────────────────────────────────
+
+POST /api/token/verify/
+  Check whether a token is still valid.
+
+  Request body:
+    { "token": "<JWT access or refresh token>" }
+
+  Response 200: {} (empty body — token is valid)
+  Response 401: { "detail": "Token is invalid or expired" }
+
+───────────────────────────────────────────────────────────────────────────────
+
+How to authenticate requests:
+  Add the Authorization header to every request:
+    Authorization: Bearer <access token>
+
+  Example:
+    curl http://localhost:8000/api/devices/ \
+         -H "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+
+
+═══════════════════════════════════════════════════════════════════════════════
+DASHBOARD
+═══════════════════════════════════════════════════════════════════════════════
+
+GET /api/dashboard/stats/
+  Aggregate counters displayed on the main dashboard page.
+  Auth: Any authenticated user.
+
+  Response 200:
+    {
+      "total_devices":   15,
+      "devices_up":      12,
+      "devices_down":    2,
+      "devices_unknown": 1,
+      "sites_online":    3,
+      "active_alerts":   4,
+      "critical_alerts": 1,
+      "compliance_pct":  87
+    }
+
+  Fields:
+    total_devices    Total registered devices
+    devices_up       Devices whose status is "up"
+    devices_down     Devices whose status is "down"
+    devices_unknown  Devices never polled or status unknown
+    sites_online     Number of distinct sites with at least one UP device
+    active_alerts    Firing (unresolved) Prometheus alerts
+    critical_alerts  Firing alerts with severity "critical"
+    compliance_pct   Latest compliance score: pass/(pass+fail) * 100
+
+
+═══════════════════════════════════════════════════════════════════════════════
+ACCOUNTS — USER MANAGEMENT
+═══════════════════════════════════════════════════════════════════════════════
+
+All /api/accounts/users/ endpoints require Admin role, EXCEPT /me/.
+
+───────────────────────────────────────────────────────────────────────────────
+
+GET /api/accounts/users/
+  List all users. Auth: Admin.
+  Query params: ?role=engineer  ?is_active=true
+
+  Response 200 (array):
+    [
+      {
+        "id": 1,
+        "username": "john",
+        "first_name": "John",
+        "last_name": "Doe",
+        "email": "john@example.com",
+        "role": "engineer",
+        "is_superuser": false,
+        "is_active": true,
+        "date_joined": "2026-01-15T10:00:00Z",
+        "last_login": "2026-06-17T08:42:00Z",
+        "is_admin_flag": false,
+        "is_engineer_flag": true
+      },
+      ...
+    ]
+
+───────────────────────────────────────────────────────────────────────────────
+
+POST /api/accounts/users/
+  Create a user account. Auth: Admin.
+
+  Request body:
+    {
+      "username":   "newuser",
+      "first_name": "Jane",
+      "last_name":  "Smith",
+      "email":      "jane@example.com",
+      "role":       "engineer",
+      "is_active":  true
+    }
+
+  role must be one of: "admin", "engineer", "readonly"
+
+  Response 201: full user object (same shape as GET list item)
+
+───────────────────────────────────────────────────────────────────────────────
+
+GET /api/accounts/users/{id}/
+  User detail. Auth: Admin.
+  Response 200: full user object
+
+───────────────────────────────────────────────────────────────────────────────
+
+PATCH /api/accounts/users/{id}/
+  Partial update (e.g. change email or first/last name). Auth: Admin.
+  Read-only fields that are ignored: id, username, is_superuser,
+    date_joined, last_login.
+
+  Request body (any subset):
+    { "email": "newemail@example.com", "role": "readonly" }
+
+  Response 200: updated user object
+
+───────────────────────────────────────────────────────────────────────────────
+
+DELETE /api/accounts/users/{id}/
+  Delete a user account. Auth: Admin.
+  Response 204: No Content
+
+───────────────────────────────────────────────────────────────────────────────
+
+GET /api/accounts/users/me/
+  Profile of the currently authenticated user. Auth: Any authenticated.
+
+  Response 200:
+    {
+      "id": 3,
+      "username": "alice",
+      "first_name": "Alice",
+      "last_name": "Wong",
+      "email": "alice@example.com",
+      "role": "engineer",
+      "is_admin": false,
+      "is_engineer": true,
+      "last_login": "2026-06-17T09:00:00Z",
+      "date_joined": "2026-02-01T00:00:00Z"
+    }
+
+───────────────────────────────────────────────────────────────────────────────
+
+POST /api/accounts/users/{id}/set-role/
+  Change a user's role. Auth: Admin.
+
+  Request body:
+    { "role": "engineer" }
+
+  role must be one of: "admin", "engineer", "readonly"
+  Response 200: updated user object
+  Response 400: { "error": "role must be one of: ['admin', 'engineer', 'readonly']" }
+
+───────────────────────────────────────────────────────────────────────────────
+
+POST /api/accounts/users/{id}/toggle-active/
+  Enable or disable a user account. Auth: Admin.
+  Cannot deactivate your own account.
+
+  Request body: (none required)
+
+  Response 200:
+    { "id": 5, "is_active": false }
+
+  Response 400:
+    { "error": "You cannot deactivate your own account." }
+
+
+═══════════════════════════════════════════════════════════════════════════════
+INVENTORY — DEVICE MANAGEMENT
+═══════════════════════════════════════════════════════════════════════════════
+
+Devices are the central entity. ssh_password is write-only — it is accepted
+on create/update but NEVER returned in any response (stored Fernet-encrypted).
+
+───────────────────────────────────────────────────────────────────────────────
+
+GET /api/devices/
+  List all devices. Auth: Any authenticated.
+  Uses DeviceListSerializer (no ssh_password, no wan_ip/loopback_ip).
+
+  Query params (filters):
+    ?site=sofia            Filter by site slug (sofia|plovdiv|burgas|wan)
+    ?status=up             Filter by status (up|down|unknown)
+    ?device_type=router    Filter by type (router|firewall_primary|
+                             firewall_secondary|l2_switch|wan_switch)
+    ?search=r-sofia        Search hostname, ip_address, description, model
+    ?ordering=hostname     Sort field (prefix - for descending)
+
+  Response 200:
+    {
+      "count": 15,
+      "next": null,
+      "previous": null,
+      "results": [
+        {
+          "id": 1,
+          "hostname": "R-Sofia",
+          "ip_address": "192.168.1.50",
+          "site": "sofia",
+          "site_display": "Sofia",
+          "site_color": "#10b981",
+          "device_type": "router",
+          "device_type_display": "Router",
+          "device_type_icon": "bi-router",
+          "vendor": "Cisco",
+          "os_version": "15.2",
+          "status": "up",
+          "status_display": "Up",
+          "last_seen": "2026-06-17T09:45:00Z",
+          "updated_at": "2026-06-17T09:45:00Z"
+        },
+        ...
+      ]
+    }
+
+───────────────────────────────────────────────────────────────────────────────
+
+POST /api/devices/
+  Register a new device. Auth: Engineer+.
+
+  Request body:
+    {
+      "hostname":        "R-Sofia",
+      "ip_address":      "192.168.1.50",
+      "wan_ip":          "4.2.2.4",
+      "loopback_ip":     "110.0.0.1",
+      "site":            "sofia",
+      "device_type":     "router",
+      "vendor":          "Cisco",
+      "model":           "IOL",
+      "os_version":      "15.2",
+      "description":     "Sofia edge router",
+      "snmp_community":  "public",
+      "snmp_version":    "2c",
+      "ssh_username":    "admin",
+      "ssh_password":    "MySecretPw1"
+    }
+
+  Required: hostname, ip_address, site, device_type
+  ssh_password: plaintext — stored Fernet-encrypted, never returned
+
+  site choices:     sofia | plovdiv | burgas | wan
+  device_type:      router | firewall_primary | firewall_secondary |
+                    l2_switch | wan_switch
+  snmp_version:     1 | 2c | 3
+
+  Response 201: full device object (DeviceSerializer — includes wan_ip,
+    loopback_ip, snmp fields — but NOT ssh_password)
+
+───────────────────────────────────────────────────────────────────────────────
+
+GET /api/devices/{id}/
+  Full device detail. Auth: Any authenticated.
+
+  Response 200:
+    {
+      "id": 1,
+      "hostname": "R-Sofia",
+      "ip_address": "192.168.1.50",
+      "wan_ip": "4.2.2.4",
+      "loopback_ip": "110.0.0.1",
+      "site": "sofia",
+      "site_display": "Sofia",
+      "site_color": "#10b981",
+      "device_type": "router",
+      "device_type_display": "Router",
+      "vendor": "Cisco",
+      "model": "IOL",
+      "os_version": "15.2",
+      "description": "Sofia edge router",
+      "status": "up",
+      "status_display": "Up",
+      "role_short": "r",
+      "snmp_community": "public",
+      "snmp_version": "2c",
+      "ssh_username": "admin",
+      "last_seen": "2026-06-17T09:45:00Z",
+      "last_polled": "2026-06-17T09:45:00Z",
+      "created_at": "2026-01-10T12:00:00Z",
+      "updated_at": "2026-06-17T09:45:00Z"
+    }
+
+  Note: ssh_password is NEVER included in any response.
+
+───────────────────────────────────────────────────────────────────────────────
+
+PATCH /api/devices/{id}/
+  Partial update. Auth: Engineer+.
+
+  Request body (any writable field):
+    { "os_version": "15.4", "ssh_password": "NewPass123" }
+
+  Response 200: full device object
+
+───────────────────────────────────────────────────────────────────────────────
+
+PUT /api/devices/{id}/
+  Full update (all writable fields required). Auth: Engineer+.
+  Response 200: full device object
+
+───────────────────────────────────────────────────────────────────────────────
+
+DELETE /api/devices/{id}/
+  Delete device and all related records (audit logs, CLI sessions,
+  compliance results, drift results). Auth: Admin.
+  Response 204: No Content
+
+───────────────────────────────────────────────────────────────────────────────
+
+POST /api/devices/{id}/poll/
+  Trigger an immediate ICMP + SNMP poll for one device. Auth: Engineer+.
+  Enqueues a Celery task on the "monitoring" queue.
+
+  Response 202:
+    {
+      "task_id": "d1f2a3b4-...",
+      "message": "Polling R-Sofia (192.168.1.50)…"
+    }
+
+───────────────────────────────────────────────────────────────────────────────
+
+POST /api/devices/poll-all/
+  Poll all registered devices in parallel. Auth: Engineer+.
+  Enqueues a Celery group on the "monitoring" queue.
+
+  Response 202:
+    {
+      "task_id": "e2f3a4b5-...",
+      "message": "Polling all devices…"
+    }
+
+───────────────────────────────────────────────────────────────────────────────
+
+POST /api/devices/discover/
+  Scan the management CIDR (MGMT_NETWORK setting) for unknown live hosts.
+  Creates Device records for discovered hosts using SNMP sysName.
+  Auth: Engineer+. Enqueues on the "discovery" queue.
+
+  Response 202:
+    {
+      "task_id": "f3a4b5c6-...",
+      "message": "Discovery scan started…"
+    }
+
+───────────────────────────────────────────────────────────────────────────────
+
+GET /api/devices/status/
+  Minimal device list for the topology.js map. Auth: Any authenticated.
+
+  Response 200 (array, no pagination):
+    [
+      {
+        "id": 1,
+        "hostname": "R-Sofia",
+        "site": "sofia",
+        "device_type": "router",
+        "role_short": "r",
+        "status": "up"
+      },
+      ...
+    ]
+
+───────────────────────────────────────────────────────────────────────────────
+
+GET /api/devices/by-site/{site}/
+  All devices for a given site slug. Auth: Any authenticated.
+  site: sofia | plovdiv | burgas | wan
+
+  Response 200 (array): same shape as GET /api/devices/ list items
+
+
+═══════════════════════════════════════════════════════════════════════════════
+PROVISIONING — TEMPLATES
+═══════════════════════════════════════════════════════════════════════════════
+
+DB-stored Jinja2 templates (separate from filesystem .j2 files).
+
+───────────────────────────────────────────────────────────────────────────────
+
+GET /api/provisioning/templates/
+  List DB templates. Auth: Any authenticated.
+
+  Query params:
+    ?device_type=router    Filter by device type slug
+    ?site=sofia            Filter by site slug (empty = all sites)
+    ?is_active=true        Filter active/inactive
+    ?search=ssh            Search name, description
+    ?ordering=-updated_at  Sort field
+
+  Response 200 (paginated):
+    {
+      "count": 4,
+      "results": [
+        {
+          "id": 1,
+          "name": "ssh_hardening_v2",
+          "description": "Custom SSH hardening for routers",
+          "device_type": "router",
+          "site": "",
+          "is_active": true,
+          "updated_at": "2026-06-15T14:00:00Z"
+        },
+        ...
+      ]
+    }
+
+  (List view omits content field to keep responses small.)
+
+───────────────────────────────────────────────────────────────────────────────
+
+POST /api/provisioning/templates/
+  Create a DB template. Auth: Engineer+.
+
+  Request body:
+    {
+      "name":        "acl_custom",
+      "description": "Custom ACL for management",
+      "device_type": "router",
+      "site":        "",
+      "content":     "ip access-list standard MGMT\n permit {{ ip_address }}",
+      "is_active":   true
+    }
+
+  name:        unique, used as the template lookup key
+  device_type: leave blank for all types
+  site:        leave blank for all sites
+  content:     Jinja2 template; use {{ hostname }}, {{ ip_address }}, etc.
+
+  Response 201: full template object (includes content)
+
+───────────────────────────────────────────────────────────────────────────────
+
+GET /api/provisioning/templates/{id}/
+  Template detail including full content. Auth: Any authenticated.
+  Response 200: full template object
+
+───────────────────────────────────────────────────────────────────────────────
+
+PUT / PATCH /api/provisioning/templates/{id}/
+  Update template. Auth: Engineer+.
+  Response 200: full template object
+
+───────────────────────────────────────────────────────────────────────────────
+
+DELETE /api/provisioning/templates/{id}/
+  Delete DB template. Does NOT affect .j2 files on disk.
+  Auth: Engineer+.  Response 204: No Content
+
+───────────────────────────────────────────────────────────────────────────────
+
+GET /api/provisioning/templates/all-names/
+  Combined list of all available template names: DB templates + .j2 files.
+  Used to populate the template dropdown in the UI.
+  Auth: Any authenticated.
+
+  Response 200 (array):
+    [
+      { "name": "ssh_hardening.j2",  "source": "file" },
+      { "name": "ospf_area0.j2",     "source": "file" },
+      { "name": "acl_custom",        "source": "db"   },
+      ...
+    ]
+
+
+═══════════════════════════════════════════════════════════════════════════════
+PROVISIONING — AUDIT LOG
+═══════════════════════════════════════════════════════════════════════════════
+
+Read-only. Every config push and config pull is recorded here automatically.
+
+───────────────────────────────────────────────────────────────────────────────
+
+GET /api/provisioning/audit/
+  List audit log entries, newest first. Auth: Any authenticated.
+
+  Query params:
+    ?status=success         Filter: pending | success | failed
+    ?device__site=sofia     Filter by device site
+    ?device=3               Filter by device ID
+    ?search=ssh_hardening   Search hostname, template_name, action, username
+    ?ordering=-timestamp    Sort field
+
+  Response 200 (paginated):
+    {
+      "count": 42,
+      "results": [
+        {
+          "id": 7,
+          "device": 1,
+          "device_hostname": "R-Sofia",
+          "device_site": "sofia",
+          "user": 2,
+          "user_username": "alice",
+          "template_name": "ssh_hardening.j2",
+          "action": "Push ssh_hardening.j2",
+          "status": "success",
+          "task_id": "abc123",
+          "execution_time": 4.37,
+          "timestamp": "2026-06-17T10:15:00Z",
+          "has_diff": true
+        },
+        ...
+      ]
+    }
+
+───────────────────────────────────────────────────────────────────────────────
+
+GET /api/provisioning/audit/{id}/
+  Full audit entry detail. Auth: Any authenticated.
+
+  Response 200 (includes large fields):
+    {
+      "id": 7,
+      "device": 1,
+      "device_hostname": "R-Sofia",
+      "device_site": "sofia",
+      "user": 2,
+      "user_username": "alice",
+      "template_name": "ssh_hardening.j2",
+      "action": "Push ssh_hardening.j2",
+      "config_sent": "ip ssh version 2\nno service telnet\n...",
+      "config_diff": "--- before\n+++ after\n@@ ... @@\n+ip ssh version 2",
+      "status": "success",
+      "error_message": "",
+      "task_id": "abc123",
+      "execution_time": 4.37,
+      "timestamp": "2026-06-17T10:15:00Z"
+    }
+
+
+═══════════════════════════════════════════════════════════════════════════════
+PROVISIONING — PUSH & PULL ACTIONS
+═══════════════════════════════════════════════════════════════════════════════
+
+───────────────────────────────────────────────────────────────────────────────
+
+POST /api/provisioning/render/
+  Preview a rendered template for one device WITHOUT connecting via SSH.
+  Auth: Any authenticated.
+
+  Request body:
+    {
+      "device_id":     1,
+      "template_name": "ssh_hardening.j2",
+      "extra_context": {}
+    }
+
+  extra_context: optional dict of additional Jinja2 variables
+
+  Response 200:
+    {
+      "rendered":  "ip ssh version 2\nno service telnet\n...",
+      "device":    "R-Sofia",
+      "template":  "ssh_hardening.j2"
+    }
+
+  Response 400: { "error": "Template 'unknown.j2' not found." }
+
+───────────────────────────────────────────────────────────────────────────────
+
+POST /api/provisioning/push/
+  Push a rendered config to one or more devices via SSH.
+  Auth: Engineer+. Enqueues on the "provisioning" queue.
+
+  Request body:
+    {
+      "device_ids":    [1, 2, 3],
+      "template_name": "ssh_hardening.j2",
+      "dry_run":       false,
+      "extra_context": { "custom_var": "value" }
+    }
+
+  device_ids:    array of Device IDs
+  template_name: DB template name or .j2 file stem
+  dry_run:       if true, renders the template and logs it but sends NO
+                 commands to the device
+  extra_context: optional additional Jinja2 variables
+
+  Response 202:
+    {
+      "task_id":      "b2c3d4e5-...",
+      "device_count": 3,
+      "template":     "ssh_hardening.j2",
+      "dry_run":      false,
+      "status":       "queued"
+    }
+
+  Poll /api/provisioning/task/{task_id}/ to get the result.
+  Each device gets its own sub-task in a Celery group.
+
+───────────────────────────────────────────────────────────────────────────────
+
+POST /provisioning/api/pull-config/
+  Trigger an SSH pull of show running-config for one device.
+  The config is stored in the Celery result backend (Redis) and is
+  never written to disk. Auth: Engineer+.
+
+  Note: This endpoint is mounted at /provisioning/api/pull-config/
+        (under the provisioning app prefix, not /api/).
+
+  Request body:
+    { "device_id": 1 }
+
+  Response 202:
+    {
+      "task_id": "c3d4e5f6-...",
+      "device":  "R-Sofia",
+      "status":  "queued"
+    }
+
+  Poll /api/provisioning/task/{task_id}/ until state == "SUCCESS", then:
+
+GET /provisioning/pull-config/{task_id}/download/
+  Download the running-config as a .txt file attachment.
+  Auth: Login. Returns HTTP 200 with Content-Disposition: attachment.
+  Filename format: {site}_{hostname}_running-config_{YYYY-MM-DD_HH-MM}.txt
+  Response 202 if still running, 200 with file if done.
+
+───────────────────────────────────────────────────────────────────────────────
+
+GET /api/provisioning/task/{task_id}/
+  Poll a Celery task result. Auth: Any authenticated.
+
+  Response (PENDING):
+    { "task_id": "abc...", "state": "PENDING" }
+
+  Response (SUCCESS — push task):
+    {
+      "task_id": "abc...",
+      "state":   "SUCCESS",
+      "result": {
+        "device":  "R-Sofia",
+        "pass":    true,
+        "status":  "success"
+      }
+    }
+
+  Response (SUCCESS — pull-config task):
+    {
+      "task_id": "abc...",
+      "state":   "SUCCESS",
+      "result": {
+        "config":    "Building configuration...\n...",
+        "hostname":  "R-Sofia",
+        "site":      "sofia",
+        "timestamp": "2026-06-17_10-30"
+      }
+    }
+
+  Response (FAILURE):
+    {
+      "task_id": "abc...",
+      "state":   "FAILURE",
+      "result":  "NetmikoAuthenticationException: ..."
+    }
+
+
+═══════════════════════════════════════════════════════════════════════════════
+MONITORING — ALERTS
+═══════════════════════════════════════════════════════════════════════════════
+
+───────────────────────────────────────────────────────────────────────────────
+
+GET /api/monitoring/alerts/
+  List alerts, newest first. Auth: Any authenticated.
+
+  Query params:
+    ?status=firing          firing | resolved
+    ?severity=critical      critical | warning | info
+    ?site=sofia             Site label
+    ?alertname=DeviceDown   Prometheus alert rule name
+    ?acknowledged=false     true | false
+    ?search=R-Sofia         Searches alertname, instance, summary, description
+    ?ordering=-received_at  Sort field
+
+  Response 200 (paginated):
+    {
+      "count": 8,
+      "results": [
+        {
+          "id": 3,
+          "fingerprint": "a1b2c3d4e5f6",
+          "alertname": "DeviceDown",
+          "instance": "192.168.1.50",
+          "site": "sofia",
+          "severity": "critical",
+          "status": "firing",
+          "is_active": true,
+          "summary": "R-Sofia is unreachable",
+          "description": "ICMP probe failed for 5m",
+          "starts_at": "2026-06-17T08:00:00Z",
+          "ends_at": null,
+          "received_at": "2026-06-17T08:00:05Z",
+          "acknowledged": false,
+          "acknowledged_by": null,
+          "acknowledged_by_username": null,
+          "acknowledged_at": null,
+          "ack_note": ""
+        },
+        ...
+      ]
+    }
+
+───────────────────────────────────────────────────────────────────────────────
+
+GET /api/monitoring/alerts/{id}/
+  Alert detail. Auth: Any authenticated.
+  Response 200: full alert object (same fields as list item)
+
+───────────────────────────────────────────────────────────────────────────────
+
+POST /api/monitoring/alerts/{id}/acknowledge/
+  Acknowledge an alert. Sets acknowledged=true, records who did it.
+  Auth: Any authenticated (all roles can acknowledge).
+
+  Request body (optional):
+    { "note": "Maintenance window — expected downtime." }
+
+  Response 200: full alert object with updated acknowledged fields.
+
+  Response 200 (already acknowledged):
+    { "detail": "Already acknowledged." }
+
+───────────────────────────────────────────────────────────────────────────────
+
+GET /api/monitoring/alerts/active-summary/
+  Count of currently firing alerts by severity. Auth: Any authenticated.
+  Used by the dashboard header alert badge.
+
+  Response 200:
+    {
+      "total":    5,
+      "critical": 2,
+      "warning":  2,
+      "info":     1,
+      "unacked":  3
+    }
+
+───────────────────────────────────────────────────────────────────────────────
+
+POST /api/alerts/webhook/
+  AlertManager webhook receiver. NO AUTHENTICATION REQUIRED.
+  This endpoint is network-isolated — reachable only from AlertManager
+  container. Django's CSRF is exempt.
+
+  Accepts the standard AlertManager POST body (webhook_config):
+
+  Request body:
+    {
+      "version":   "4",
+      "groupKey":  "{}:{alertname='DeviceDown'}",
+      "status":    "firing",
+      "receiver":  "django-webhook",
+      "groupLabels": { "alertname": "DeviceDown" },
+      "commonLabels": {
+        "alertname": "DeviceDown",
+        "severity":  "critical",
+        "instance":  "192.168.1.50",
+        "site":      "sofia"
+      },
+      "commonAnnotations": {
+        "summary":     "R-Sofia is unreachable",
+        "description": "ICMP probe failed for 5m"
+      },
+      "alerts": [
+        {
+          "status":      "firing",
+          "labels":      { "alertname": "DeviceDown", "severity": "critical",
+                           "instance": "192.168.1.50", "site": "sofia" },
+          "annotations": { "summary": "R-Sofia is unreachable" },
+          "startsAt":    "2026-06-17T08:00:00Z",
+          "endsAt":      "0001-01-01T00:00:00Z",
+          "fingerprint": "a1b2c3d4e5f6",
+          "generatorURL": "http://prometheus:9090/..."
+        }
+      ]
+    }
+
+  Behaviour:
+    - Each alert in the array is processed independently.
+    - Alert.update_or_create(fingerprint=...) — repeat firings update the record.
+    - DeviceDown alerts instantly set Device.status='down' (sync).
+    - DeviceResolved alerts set Device.status='unknown' (polling restores 'up').
+    - New firing critical alerts trigger send_alert_email Celery task.
+    - Resolved alerts also trigger a resolution email.
+    - mark_devices_from_alerts task queued for reconciliation (countdown=5s).
+
+  Response 200:
+    {
+      "received": 1,
+      "created":  1,
+      "resolved": 0
+    }
+
+  Response 400: validation errors from AlertManagerWebhookSerializer.
+
+
+═══════════════════════════════════════════════════════════════════════════════
+SECURITY — COMPLIANCE RULES
+═══════════════════════════════════════════════════════════════════════════════
+
+───────────────────────────────────────────────────────────────────────────────
+
+GET /api/security/rules/
+  List compliance rules. Auth: Any authenticated.
+
+  Query params:
+    ?is_active=true         Filter active/inactive
+    ?severity=critical      critical | warning | info
+    ?category=SSH           Filter by category label
+    ?search=telnet          Search name, description, category
+    ?ordering=category      Sort field
+
+  Response 200 (paginated):
+    {
+      "count": 12,
+      "results": [
+        {
+          "id": 1,
+          "name": "SSH v2 enabled",
+          "description": "Ensure SSH version 2 is configured",
+          "category": "SSH",
+          "pattern": "ip ssh version 2",
+          "match_means_pass": true,
+          "device_types": [],
+          "severity": "critical",
+          "is_active": true,
+          "remediation": "ip ssh version 2",
+          "created_at": "2026-01-10T00:00:00Z",
+          "updated_at": "2026-01-10T00:00:00Z"
+        },
+        ...
+      ]
+    }
+
+───────────────────────────────────────────────────────────────────────────────
+
+POST /api/security/rules/
+  Create a compliance rule. Auth: Engineer+.
+
+  Request body:
+    {
+      "name":             "EIGRP authentication",
+      "description":      "EIGRP MD5 key-chain required",
+      "category":         "Routing",
+      "pattern":          "ip authentication mode eigrp .+ md5",
+      "match_means_pass": true,
+      "device_types":     ["router"],
+      "severity":         "warning",
+      "is_active":        true,
+      "remediation":      "key chain EIGRP\n  key 1\n   key-string Secret123"
+    }
+
+  device_types: JSON array of device_type slugs. [] = all device types.
+  match_means_pass: true = pattern present means PASS (presence check)
+                    false = pattern present means FAIL (absence check)
+
+  Response 201: full rule object
+
+───────────────────────────────────────────────────────────────────────────────
+
+GET /api/security/rules/{id}/         Rule detail.         Auth: Any.
+PUT/PATCH /api/security/rules/{id}/   Update rule.         Auth: Engineer+.
+DELETE /api/security/rules/{id}/      Delete rule.         Auth: Engineer+.
+  Note: Deleting a rule also deletes all its ComplianceResults (CASCADE).
+
+
+═══════════════════════════════════════════════════════════════════════════════
+SECURITY — COMPLIANCE RESULTS
+═══════════════════════════════════════════════════════════════════════════════
+
+Read-only. Results are created by the Celery task, not by the API.
+
+───────────────────────────────────────────────────────────────────────────────
+
+GET /api/security/results/
+  All compliance results, newest first. Auth: Any authenticated.
+
+  Query params:
+    ?status=fail            pass | fail | error | skipped
+    ?device=3               Filter by device ID
+    ?rule=1                 Filter by rule ID
+    ?rule__category=SSH     Filter by rule category
+    ?device__site=sofia     Filter by device site
+    ?search=R-Sofia         Search hostname, rule name, category
+    ?ordering=-checked_at   Sort field
+
+  Response 200 (paginated):
+    {
+      "count": 180,
+      "results": [
+        {
+          "id": 42,
+          "device": 1,
+          "device_hostname": "R-Sofia",
+          "device_site": "sofia",
+          "rule": 1,
+          "rule_name": "SSH v2 enabled",
+          "rule_category": "SSH",
+          "rule_severity": "critical",
+          "status": "pass",
+          "passed": true,
+          "evidence": "ip ssh version 2",
+          "error_message": "",
+          "checked_at": "2026-06-17T02:00:14Z",
+          "task_id": "d4e5f6a7-..."
+        },
+        ...
+      ]
+    }
+
+───────────────────────────────────────────────────────────────────────────────
+
+GET /api/security/results/{id}/
+  Single result detail. Auth: Any authenticated.
+  Response 200: full result object (same fields as list)
+
+
+═══════════════════════════════════════════════════════════════════════════════
+SECURITY — COMPLIANCE ACTIONS
+═══════════════════════════════════════════════════════════════════════════════
+
+───────────────────────────────────────────────────────────────────────────────
+
+GET /api/security/compliance/summary/
+  Aggregate compliance statistics across all devices.
+  Auth: Any authenticated.
+
+  Response 200:
+    {
+      "overall_score":     87,
+      "total_checks":      180,
+      "total_pass":        157,
+      "total_fail":        20,
+      "total_error":       3,
+      "devices_checked":   15,
+      "devices_compliant": 12,
+      "devices_drifted":   3,
+      "last_checked":      "2026-06-17T02:00:14Z"
+    }
+
+  devices_compliant: devices with compliance score >= 80%
+  devices_drifted:   devices whose latest drift result is "drifted"
+  overall_score:     total_pass / (total_pass + total_fail) * 100
+
+───────────────────────────────────────────────────────────────────────────────
+
+POST /api/security/compliance/run/{device_id}/
+  Run compliance checks on a single device. Auth: Engineer+.
+  SSH fetches running-config, evaluates all applicable active rules,
+  writes ComplianceResult records.
+
+  Response 202:
+    { "task_id": "e5f6a7b8-...", "device_id": 1 }
+
+  Task result (on SUCCESS):
+    {
+      "device":  "R-Sofia",
+      "pass":    10,
+      "fail":    2,
+      "error":   0,
+      "skipped": 0,
+      "score":   83
+    }
+
+───────────────────────────────────────────────────────────────────────────────
+
+POST /api/security/compliance/run-all/
+  Run compliance checks on all UP devices in parallel.
+  Auth: Engineer+.
+
+  Response 202:
+    { "task_id": "f6a7b8c9-..." }
+
+  Task result (on SUCCESS):
+    { "dispatched": 12, "group_id": "g7h8i9j0-..." }
+
+───────────────────────────────────────────────────────────────────────────────
+
+POST /api/security/drift/run/{device_id}/
+  Run a drift check (compare running-config vs golden baseline) on one device.
+  Auth: Engineer+. Skipped if no GoldenConfig exists for this device type.
+
+  Response 202:
+    { "task_id": "a7b8c9d0-...", "device_id": 1 }
+
+  Task result (on SUCCESS):
+    {
+      "device":      "R-Sofia",
+      "status":      "drifted",
+      "drift_lines": 6
+    }
+
+───────────────────────────────────────────────────────────────────────────────
+
+POST /api/security/drift/run-all/
+  Run drift checks on all UP devices that have an active GoldenConfig
+  for their device type. Auth: Engineer+.
+
+  Response 202:
+    { "task_id": "b8c9d0e1-..." }
+
+  Task result: { "dispatched": 8, "group_id": "c9d0e1f2-..." }
+
+
+═══════════════════════════════════════════════════════════════════════════════
+SECURITY — GOLDEN CONFIGS
+═══════════════════════════════════════════════════════════════════════════════
+
+One golden config per device_type (unique constraint). Used as the
+expected baseline in drift detection.
+
+───────────────────────────────────────────────────────────────────────────────
+
+GET /api/security/golden/
+  List golden configs. Auth: Any authenticated.
+
+  Query params:
+    ?device_type=router    Filter by device type slug
+    ?is_active=true        Filter active/inactive
+    ?search=router         Search name, description, device_type
+
+  Response 200 (paginated):
+    {
+      "count": 5,
+      "results": [
+        {
+          "id": 1,
+          "device_type": "router",
+          "name": "Router baseline v3",
+          "description": "Expected IOS config for all edge routers",
+          "content": "ip ssh version 2\nno service telnet\n...",
+          "is_active": true,
+          "version": 3,
+          "created_by": 1,
+          "created_by_username": "admin",
+          "created_at": "2026-05-01T00:00:00Z",
+          "updated_at": "2026-06-10T09:00:00Z"
+        },
+        ...
+      ]
+    }
+
+───────────────────────────────────────────────────────────────────────────────
+
+POST /api/security/golden/
+  Create a golden config baseline. Auth: Engineer+.
+  created_by is auto-set from the authenticated user.
+
+  Request body:
+    {
+      "device_type": "router",
+      "name":        "Router baseline v1",
+      "description": "Expected config for Cisco IOL routers",
+      "content":     "ip ssh version 2\nno service telnet\nservice password-encryption",
+      "is_active":   true,
+      "version":     1
+    }
+
+  Response 201: full golden config object
+  Response 400 if device_type already has a golden config (unique constraint).
+
+───────────────────────────────────────────────────────────────────────────────
+
+GET /api/security/golden/{id}/         Detail.   Auth: Any.
+PUT/PATCH /api/security/golden/{id}/   Update.   Auth: Engineer+.
+DELETE /api/security/golden/{id}/      Delete.   Auth: Engineer+.
+  Note: Deleting a golden config sets DriftResult.golden_config to NULL (SET NULL)
+        rather than deleting drift history.
+
+
+═══════════════════════════════════════════════════════════════════════════════
+SECURITY — DRIFT RESULTS
+═══════════════════════════════════════════════════════════════════════════════
+
+Read-only. Results are created by the Celery task, not by the API.
+
+───────────────────────────────────────────────────────────────────────────────
+
+GET /api/security/drift/
+  All drift results, newest first. Auth: Any authenticated.
+
+  Query params:
+    ?status=drifted         clean | drifted | error
+    ?device=3               Filter by device ID
+    ?device__site=sofia     Filter by device site
+    ?search=R-Sofia         Search device hostname
+    ?ordering=-drift_lines  Sort field
+
+  Response 200 (paginated):
+    {
+      "count": 30,
+      "results": [
+        {
+          "id": 5,
+          "device": 1,
+          "device_hostname": "R-Sofia",
+          "device_site": "sofia",
+          "device_type": "router",
+          "golden_config": 1,
+          "golden_name": "Router baseline v3",
+          "status": "drifted",
+          "is_clean": false,
+          "drift_lines": 6,
+          "diff": "--- golden/router\n+++ running/R-Sofia\n@@ -12,3 +12,4 @@\n ...",
+          "error_message": "",
+          "checked_at": "2026-06-17T03:00:22Z",
+          "task_id": "d0e1f2a3-..."
+        },
+        ...
+      ]
+    }
+
+───────────────────────────────────────────────────────────────────────────────
+
+GET /api/security/drift/{id}/
+  Drift result detail including full diff text. Auth: Any authenticated.
+  Response 200: full drift result object (same fields as list)
+
+
+═══════════════════════════════════════════════════════════════════════════════
+CLI — SESSIONS & COMMANDS
+═══════════════════════════════════════════════════════════════════════════════
+
+CLI sessions group commands by device + user. The WebSocket live terminal
+(xterm.js) uses /ws/cli/{device_pk}/ — documented separately in the
+WebSocket section below.
+
+───────────────────────────────────────────────────────────────────────────────
+
+GET /api/cli/sessions/
+  List CLI sessions. Auth: Any authenticated.
+
+  Query params:
+    ?device=3    Filter by device ID
+
+  Response 200 (paginated):
+    {
+      "count": 7,
+      "results": [
+        {
+          "id": 2,
+          "device": 1,
+          "device_hostname": "R-Sofia",
+          "user": 3,
+          "user_username": "alice",
+          "name": "Session #2",
+          "created_at": "2026-06-17T09:00:00Z",
+          "last_used": "2026-06-17T09:30:00Z",
+          "command_count": 14
+        },
+        ...
+      ]
+    }
+
+───────────────────────────────────────────────────────────────────────────────
+
+POST /api/cli/sessions/
+  Create a new CLI session. Auth: Engineer+.
+  user is auto-set from the authenticated user.
+
+  Request body:
+    {
+      "device": 1,
+      "name":   "Maintenance 2026-06-17"
+    }
+
+  name is optional — defaults to "Session #N" if blank.
+
+  Response 201: full session object
+
+───────────────────────────────────────────────────────────────────────────────
+
+GET /api/cli/sessions/{id}/            Session detail.   Auth: Any.
+PUT/PATCH /api/cli/sessions/{id}/      Update session.   Auth: Engineer+.
+DELETE /api/cli/sessions/{id}/         Delete session and all commands.
+                                        Auth: Engineer+.
+
+───────────────────────────────────────────────────────────────────────────────
+
+GET /api/cli/sessions/{session_id}/history/
+  All commands for a session, oldest first. Auth: Any authenticated.
+
+  Response 200 (array, no pagination):
+    [
+      {
+        "id": 10,
+        "session": 2,
+        "command": "show ip interface brief",
+        "output": "Interface   IP-Address      OK? ...",
+        "is_error": false,
+        "executed_at": "2026-06-17T09:05:00Z",
+        "duration_ms": 312
+      },
+      ...
+    ]
+
+───────────────────────────────────────────────────────────────────────────────
+
+POST /api/cli/execute/
+  Dispatch an SSH command to a device asynchronously. Auth: Engineer+.
+  Queues a Celery task on the "provisioning" queue.
+
+  Request body:
+    {
+      "device_id":  1,
+      "command":    "show ip route",
+      "session_id": 2
+    }
+
+  All three fields are required.
+
+  Command routing logic inside the Celery task:
+    - "exit", "end", "logout", "quit" → returns empty output (nav commands)
+    - "interface", "router", "ip route", "no", "vlan", etc.
+                                        → Netmiko send_config_set()
+    - everything else                  → Netmiko send_command()
+
+  Response 202:
+    { "task_id": "e1f2a3b4-..." }
+
+───────────────────────────────────────────────────────────────────────────────
+
+GET /api/cli/task/{task_id}/
+  Poll the result of an execute_cli_command task. Auth: Any authenticated.
+
+  Response (PENDING):
+    { "state": "PENDING" }
+
+  Response (SUCCESS):
+    {
+      "state":       "SUCCESS",
+      "output":      "Codes: C - connected, S - static ...",
+      "duration_ms": 418,
+      "command_id":  47,
+      "is_error":    false
+    }
+
+  Response (FAILURE):
+    {
+      "state":    "FAILURE",
+      "output":   "NetmikoAuthenticationException: ...",
+      "is_error": true
+    }
+
+
+═══════════════════════════════════════════════════════════════════════════════
+WEBSOCKET — LIVE SSH TERMINAL
+═══════════════════════════════════════════════════════════════════════════════
+
+The live terminal uses Django Channels (ASGI) over WebSocket, not HTTP.
+
+URL:     ws://localhost:8000/ws/cli/{device_pk}/
+Auth:    Django session cookie (must be logged in via browser)
+Role:    Engineer or Admin required
+         Unauthorized → WebSocket close code 4403
+
+───────────────────────────────────────────────────────────────────────────────
+
+Connection flow:
+  1. Client opens WS connection
+  2. Server checks role → closes 4403 if unauthorized
+  3. Server loads Device by pk → closes 4404 if not found
+  4. Paramiko SSHClient.connect(hostname=device.ip_address, ...)
+  5. channel = client.invoke_shell(term='xterm-256color', width=220, height=50)
+  6. Background thread: channel.recv() → WS send
+  7. Receive loop: WS message → channel.send() or resize_pty()
+
+───────────────────────────────────────────────────────────────────────────────
+
+Messages FROM client TO server:
+
+  Keyboard input:
+    { "type": "input", "data": "show ip route\r" }
+    data: string of characters (may include special chars, arrow keys as
+          escape sequences)
+
+  Terminal resize:
+    { "type": "resize", "cols": 220, "rows": 50 }
+    Sent automatically by ResizeObserver when the terminal container resizes.
+
+Messages FROM server TO client:
+  Raw text data (not JSON). The terminal emulator (xterm.js) renders it
+  directly. Includes ANSI escape codes, VT100 sequences, etc.
+
+Disconnect:
+  Client closes the WebSocket → server calls channel.close() and cleans up
+  the background SSH reader thread.
+
+
+═══════════════════════════════════════════════════════════════════════════════
+ERROR RESPONSES
+═══════════════════════════════════════════════════════════════════════════════
+
+HTTP 400 Bad Request
+  Validation error — response body contains field-level errors:
+    {
+      "template_name": ["This field is required."],
+      "device_ids": ["Enter a valid integer."]
+    }
+
+HTTP 401 Unauthorized
+  Missing or expired JWT:
+    { "detail": "Authentication credentials were not provided." }
+    { "detail": "Given token not valid for any token type",
+      "code": "token_not_valid" }
+
+HTTP 403 Forbidden
+  Authenticated but insufficient role:
+    { "error": "Engineer role required to push configs." }
+  Or DRF default:
+    { "detail": "You do not have permission to perform this action." }
+
+HTTP 404 Not Found
+    { "detail": "Not found." }
+  or custom:
+    { "error": "Device not found." }
+
+HTTP 405 Method Not Allowed
+    { "detail": "Method \"DELETE\" not allowed." }
+
+
+═══════════════════════════════════════════════════════════════════════════════
+COMPLETE ENDPOINT INDEX
+═══════════════════════════════════════════════════════════════════════════════
+
+Method  URL                                                  Auth         App
+------  ---------------------------------------------------  -----------  -----------
+POST    /api/token/                                          Public       accounts
+POST    /api/token/refresh/                                  Public       accounts
+POST    /api/token/verify/                                   Public       accounts
+
+GET     /api/dashboard/stats/                                Login        inventory
+GET     /health/                                             Public       --
+
+GET     /api/accounts/users/                                 Admin        accounts
+POST    /api/accounts/users/                                 Admin        accounts
+GET     /api/accounts/users/{id}/                            Admin        accounts
+PATCH   /api/accounts/users/{id}/                            Admin        accounts
+PUT     /api/accounts/users/{id}/                            Admin        accounts
+DELETE  /api/accounts/users/{id}/                            Admin        accounts
+GET     /api/accounts/users/me/                              Login        accounts
+POST    /api/accounts/users/{id}/set-role/                   Admin        accounts
+POST    /api/accounts/users/{id}/toggle-active/              Admin        accounts
+
+GET     /api/devices/                                        Login        inventory
+POST    /api/devices/                                        Engineer+    inventory
+GET     /api/devices/{id}/                                   Login        inventory
+PATCH   /api/devices/{id}/                                   Engineer+    inventory
+PUT     /api/devices/{id}/                                   Engineer+    inventory
+DELETE  /api/devices/{id}/                                   Admin        inventory
+POST    /api/devices/{id}/poll/                              Engineer+    inventory
+POST    /api/devices/poll-all/                               Engineer+    inventory
+POST    /api/devices/discover/                               Engineer+    inventory
+GET     /api/devices/status/                                 Login        inventory
+GET     /api/devices/by-site/{site}/                         Login        inventory
+
+GET     /api/provisioning/templates/                         Login        provisioning
+POST    /api/provisioning/templates/                         Engineer+    provisioning
+GET     /api/provisioning/templates/{id}/                    Login        provisioning
+PUT     /api/provisioning/templates/{id}/                    Engineer+    provisioning
+PATCH   /api/provisioning/templates/{id}/                    Engineer+    provisioning
+DELETE  /api/provisioning/templates/{id}/                    Engineer+    provisioning
+GET     /api/provisioning/templates/all-names/               Login        provisioning
+GET     /api/provisioning/audit/                             Login        provisioning
+GET     /api/provisioning/audit/{id}/                        Login        provisioning
+POST    /api/provisioning/render/                            Login        provisioning
+POST    /api/provisioning/push/                              Engineer+    provisioning
+GET     /api/provisioning/task/{task_id}/                    Login        provisioning
+POST    /provisioning/api/pull-config/                       Engineer+    provisioning
+GET     /provisioning/pull-config/{task_id}/download/        Login        provisioning
+
+POST    /api/alerts/webhook/                                 Public*      monitoring
+GET     /api/monitoring/alerts/                              Login        monitoring
+GET     /api/monitoring/alerts/{id}/                         Login        monitoring
+POST    /api/monitoring/alerts/{id}/acknowledge/             Login        monitoring
+GET     /api/monitoring/alerts/active-summary/               Login        monitoring
+
+GET     /api/security/rules/                                 Login        security
+POST    /api/security/rules/                                 Engineer+    security
+GET     /api/security/rules/{id}/                            Login        security
+PUT     /api/security/rules/{id}/                            Engineer+    security
+PATCH   /api/security/rules/{id}/                            Engineer+    security
+DELETE  /api/security/rules/{id}/                            Engineer+    security
+GET     /api/security/results/                               Login        security
+GET     /api/security/results/{id}/                          Login        security
+GET     /api/security/golden/                                Login        security
+POST    /api/security/golden/                                Engineer+    security
+GET     /api/security/golden/{id}/                           Login        security
+PUT     /api/security/golden/{id}/                           Engineer+    security
+PATCH   /api/security/golden/{id}/                           Engineer+    security
+DELETE  /api/security/golden/{id}/                           Engineer+    security
+GET     /api/security/drift/                                 Login        security
+GET     /api/security/drift/{id}/                            Login        security
+GET     /api/security/compliance/summary/                    Login        security
+POST    /api/security/compliance/run/{device_id}/            Engineer+    security
+POST    /api/security/compliance/run-all/                    Engineer+    security
+POST    /api/security/drift/run/{device_id}/                 Engineer+    security
+POST    /api/security/drift/run-all/                         Engineer+    security
+
+GET     /api/cli/sessions/                                   Login        cli
+POST    /api/cli/sessions/                                   Engineer+    cli
+GET     /api/cli/sessions/{id}/                              Login        cli
+PATCH   /api/cli/sessions/{id}/                              Engineer+    cli
+DELETE  /api/cli/sessions/{id}/                              Engineer+    cli
+GET     /api/cli/sessions/{session_id}/history/              Login        cli
+POST    /api/cli/execute/                                     Engineer+    cli
+GET     /api/cli/task/{task_id}/                             Login        cli
+WS      /ws/cli/{device_pk}/                                 Session*     cli
+
+GET     /api/schema/                                         Login        --
+GET     /api/docs/                                           Login        --
+GET     /api/redoc/                                          Login        --
+
+* /api/alerts/webhook/ is unauthenticated but network-isolated (AlertManager only)
+* /ws/cli/ uses Django session auth (browser cookie), not JWT

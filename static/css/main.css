@@ -24,8 +24,13 @@
     --purple-dim:  rgba(168,85,247,.15);
 
     --text:        #f9fafb;
+    --fg:          #f9fafb;
     --text-muted:  #6b7280;
     --text-dim:    #374151;
+
+    /* Bootstrap overrides — keep tables readable on dark background */
+    --bs-body-color:  #f9fafb;
+    --bs-table-color: #f9fafb;
 
     --sidebar-w:   240px;
     --topbar-h:    58px;
